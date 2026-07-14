@@ -260,13 +260,14 @@ async function apiFetch(path, options = {}) {
 }
 
 // --- Приветствие без экрана регистрации ---
+const BUILD_TAG = "build-labs-v1";
 const user = tg?.initDataUnsafe?.user;
 document.getElementById("greeting").textContent = user?.first_name
   ? `Привет, ${user.first_name}`
   : "Привет";
 document.getElementById("date-line").textContent = new Date().toLocaleDateString("ru-RU", {
   weekday: "long", day: "numeric", month: "long",
-});
+}) + " · " + BUILD_TAG;
 
 const feed = document.getElementById("feed");
 const toast = document.getElementById("status-toast");
