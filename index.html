@@ -313,11 +313,10 @@ async function refreshDashboard() {
       notable: latest.resting_pulse_notable,
     },
     {
-      label: "Тестостерон",
-      field: "тестостерон общ",
-      value: latest.testosterone != null ? `${latest.testosterone}` : "—",
-      has: latest.testosterone != null,
-      notable: latest.testosterone_status && latest.testosterone_status !== "within",
+      label: "Анализы",
+      field: "__labs__",
+      value: "→",
+      has: true,
     },
     {
       label: "Калории",
@@ -333,7 +332,7 @@ async function refreshDashboard() {
     },
     {
       label: today.last_medication ? today.last_medication.name : "Препарат",
-      field: null,
+      field: "__meds__",
       value: today.last_medication ? formatTime(today.last_medication.taken_at) : "—",
       has: !!today.last_medication,
     },
@@ -362,13 +361,30 @@ const detailChartWrap = document.getElementById("detail-chart-wrap");
 const detailHistoryList = document.getElementById("detail-history-list");
 const periodTabs = document.getElementById("period-tabs");
 
+let cameFromLabsList = false;
+
 document.getElementById("detail-back").addEventListener("click", () => {
-  metricDetail.classList.remove("open");
+  if (cameFromLabsList) {
+    cameFromLabsList = false;
+    openMetricDetail("__labs__", "Анализы");
+  } else {
+    metricDetail.classList.remove("open");
+  }
 });
 
 let currentMetricSeries = [];
 let currentMetricMeta = {};
 let currentMetricIsBp = false;
+let currentMetricBand = null;       // { low, high, label } for single-series fields
+let currentMetricBands = null;      // { sys: {low,high,label}, dia: {...} } for bp
+
+// Общепринятые ориентировочные диапазоны (не персональный диагноз, просто
+// чтобы на графике было видно, где "обычно нормально", а где выброс.
+const CLINICAL_BANDS = {
+  pulse: { low: 60, high: 100, label: "норма покоя: 60–100" },
+  bp_sys: { low: 90, high: 120, label: "ориентир: 90–120" },
+  bp_dia: { low: 60, high: 80, label: "ориентир: 60–80" },
+};
 
 function filterByPeriod(series, period) {
   if (period === "all") return series;
@@ -400,6 +416,38 @@ function buildLinePath(points, yMin, yMax, W, H) {
   return { coords, pathD };
 }
 
+function yOf(value, yMin, yMax, H) {
+  return H - ((value - yMin) / (yMax - yMin)) * H;
+}
+
+function isOut(value, band) {
+  if (!band) return false;
+  return value < band.low || value > band.high;
+}
+
+function computeYRange(valueArrays, bands) {
+  const all = [].concat(...valueArrays).filter(v => !isNaN(v));
+  (bands || []).forEach(b => { if (b) { all.push(b.low); all.push(b.high); } });
+  const min = Math.min(...all);
+  const max = Math.max(...all);
+  const pad = (max - min) * 0.15 || (bands && bands[0] ? bands[0].high * 0.1 : 5);
+  return { yMin: min - pad, yMax: max + pad };
+}
+
+function bandRectSvg(band, yMin, yMax, W, H) {
+  if (!band) return "";
+  const yTop = Math.max(0, yOf(band.high, yMin, yMax, H));
+  const yBottom = Math.min(H, yOf(band.low, yMin, yMax, H));
+  return `<rect x="0" y="${yTop.toFixed(1)}" width="${W}" height="${(yBottom - yTop).toFixed(1)}" fill="#4FB8A6" opacity="0.10"/>`;
+}
+
+function axisLabelsSvg(yMin, yMax, H, W) {
+  return `
+    <text x="${W - 4}" y="12" text-anchor="end" font-size="10" fill="#8FA0A3">${Math.round(yMax)}</text>
+    <text x="${W - 4}" y="${H - 4}" text-anchor="end" font-size="10" fill="#8FA0A3">${Math.round(yMin)}</text>
+  `;
+}
+
 function renderDetailChart(series) {
   if (currentMetricIsBp) {
     renderBpChart(series);
@@ -412,31 +460,43 @@ function renderDetailChart(series) {
     return;
   }
   const values = points.map(p => parseFloat(p[1])).filter(v => !isNaN(v));
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const pad = (max - min) * 0.15 || 1;
-  const yMin = min - pad, yMax = max + pad;
+  const band = currentMetricBand;
+  const { yMin, yMax } = computeYRange([values], [band]);
   const W = 320, H = 160;
 
   const { coords, pathD } = buildLinePath(points, yMin, yMax, W, H);
-  const dots = coords.map(c => `<circle cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" r="3" fill="#4FB8A6"/>`).join("");
+  const dots = coords.map((c, i) => {
+    const v = parseFloat(points[i][1]);
+    const color = isOut(v, band) ? "#E0785F" : "#4FB8A6";
+    const r = isOut(v, band) ? 4 : 3;
+    return `<circle cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" r="${r}" fill="${color}"/>`;
+  }).join("");
 
   detailChartWrap.innerHTML = `
+    ${band ? `<div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;"><span style="color:#4FB8A6;">▬</span> ${band.label}</div>` : ""}
     <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+      ${bandRectSvg(band, yMin, yMax, W, H)}
+      ${axisLabelsSvg(yMin, yMax, H, W)}
       <path d="${pathD}" fill="none" stroke="#4FB8A6" stroke-width="2.5" vector-effect="non-scaling-stroke"/>
       ${dots}
     </svg>
   `;
 
   const last = points[points.length - 1];
-  detailValue.textContent = last[1];
+  const lastOut = isOut(parseFloat(last[1]), band);
+  detailValue.innerHTML = lastOut
+    ? `${last[1]} <span style="font-size:14px;color:#E0785F;">вне нормы</span>`
+    : `${last[1]}`;
 
-  detailHistoryList.innerHTML = points.slice().reverse().map(p => `
+  detailHistoryList.innerHTML = points.slice().reverse().map(p => {
+    const out = isOut(parseFloat(p[1]), band);
+    return `
     <div class="history-row">
       <span class="h-date">${formatTime(p[0])}</span>
-      <span class="h-val">${p[1]}</span>
+      <span class="h-val" style="${out ? 'color:#E0785F;font-weight:700;' : ''}">${p[1]}</span>
     </div>
-  `).join("");
+  `;
+  }).join("");
 }
 
 function renderBpChart(series) {
@@ -447,26 +507,37 @@ function renderBpChart(series) {
     detailHistoryList.innerHTML = "";
     return;
   }
-  const allValues = [...sysPoints, ...diaPoints].map(p => parseFloat(p[1])).filter(v => !isNaN(v));
-  const min = Math.min(...allValues);
-  const max = Math.max(...allValues);
-  const pad = (max - min) * 0.15 || 5;
-  const yMin = min - pad, yMax = max + pad;
+  const sysBand = currentMetricBands?.sys || null;
+  const diaBand = currentMetricBands?.dia || null;
+  const sysValues = sysPoints.map(p => parseFloat(p[1]));
+  const diaValues = diaPoints.map(p => parseFloat(p[1]));
+  const { yMin, yMax } = computeYRange([sysValues, diaValues], [sysBand, diaBand]);
   const W = 320, H = 160;
 
   const sys = buildLinePath(sysPoints, yMin, yMax, W, H);
   const dia = buildLinePath(diaPoints, yMin, yMax, W, H);
-  const sysDots = sys.coords.map(c => `<circle cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" r="2.5" fill="#4FB8A6"/>`).join("");
-  const diaDots = dia.coords.map(c => `<circle cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" r="2.5" fill="#E0785F"/>`).join("");
+  const sysDots = sys.coords.map((c, i) => {
+    const v = sysValues[i];
+    const out = isOut(v, sysBand);
+    return `<circle cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" r="${out ? 4 : 2.5}" fill="${out ? '#E0785F' : '#4FB8A6'}"/>`;
+  }).join("");
+  const diaDots = dia.coords.map((c, i) => {
+    const v = diaValues[i];
+    const out = isOut(v, diaBand);
+    return `<circle cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" r="${out ? 4 : 2.5}" fill="${out ? '#E0785F' : '#E8A57A'}"/>`;
+  }).join("");
 
   detailChartWrap.innerHTML = `
-    <div style="display:flex;gap:14px;font-size:12px;color:var(--text-dim);margin-bottom:6px;">
-      <span><span style="color:#4FB8A6;">●</span> систолическое</span>
-      <span><span style="color:#E0785F;">●</span> диастолическое</span>
+    <div style="display:flex;gap:14px;font-size:12px;color:var(--text-dim);margin-bottom:6px;flex-wrap:wrap;">
+      <span><span style="color:#4FB8A6;">●</span> сист. ${sysBand ? `(${sysBand.label})` : ""}</span>
+      <span><span style="color:#E8A57A;">●</span> диаст. ${diaBand ? `(${diaBand.label})` : ""}</span>
+      <span><span style="color:#E0785F;">●</span> вне ориентира</span>
     </div>
     <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+      ${bandRectSvg(sysBand, yMin, yMax, W, H)}
+      ${axisLabelsSvg(yMin, yMax, H, W)}
       <path d="${sys.pathD}" fill="none" stroke="#4FB8A6" stroke-width="2.5" vector-effect="non-scaling-stroke"/>
-      <path d="${dia.pathD}" fill="none" stroke="#E0785F" stroke-width="2.5" vector-effect="non-scaling-stroke"/>
+      <path d="${dia.pathD}" fill="none" stroke="#E8A57A" stroke-width="2.5" vector-effect="non-scaling-stroke"/>
       ${sysDots}${diaDots}
     </svg>
   `;
@@ -480,23 +551,87 @@ function renderBpChart(series) {
   diaPoints.forEach(p => { byDate[p[0]] = byDate[p[0]] || {}; byDate[p[0]].dia = p[1]; });
   const dates = Object.keys(byDate).sort().reverse();
 
-  detailHistoryList.innerHTML = dates.map(d => `
+  detailHistoryList.innerHTML = dates.map(d => {
+    const sysOut = isOut(parseFloat(byDate[d].sys), sysBand);
+    const diaOut = isOut(parseFloat(byDate[d].dia), diaBand);
+    const flagged = sysOut || diaOut;
+    return `
     <div class="history-row">
       <span class="h-date">${formatTime(d)}</span>
-      <span class="h-val">${byDate[d].sys ?? "—"}/${byDate[d].dia ?? "—"}</span>
+      <span class="h-val" style="${flagged ? 'color:#E0785F;font-weight:700;' : ''}">${byDate[d].sys ?? "—"}/${byDate[d].dia ?? "—"}</span>
     </div>
-  `).join("");
+  `;
+  }).join("");
 }
 
-async function openMetricDetail(field, label) {
+async function openMetricDetail(field, label, fromLabsList = false) {
+  cameFromLabsList = fromLabsList;
   detailTitle.textContent = label;
   detailValue.textContent = "…";
   detailRange.textContent = "";
   detailChartWrap.innerHTML = "";
   detailHistoryList.innerHTML = "";
   currentMetricIsBp = (field === "bp");
+  currentMetricBand = null;
+  currentMetricBands = null;
+  const isMeds = (field === "__meds__");
+  const isLabsList = (field === "__labs__");
+  periodTabs.style.display = (isMeds || isLabsList) ? "none" : "";
   periodTabs.querySelectorAll("button").forEach(b => b.classList.toggle("active", b.dataset.period === "all"));
   metricDetail.classList.add("open");
+
+  if (isLabsList) {
+    detailValue.textContent = "";
+    try {
+      const rows = await apiFetch(`/indicators/latest`, { method: "GET" });
+      if (!Array.isArray(rows) || !rows.length) {
+        detailHistoryList.innerHTML = `<div style="color:var(--text-dim);padding:20px 0;">Анализов пока нет</div>`;
+        return;
+      }
+      detailHistoryList.innerHTML = rows.map(r => {
+        const out = (r.reference_low != null && r.value < r.reference_low) ||
+                    (r.reference_high != null && r.value > r.reference_high);
+        return `
+        <div class="history-row" data-test-name="${r.test_name.replace(/"/g, '&quot;')}" style="cursor:pointer;">
+          <span class="h-date">${r.test_name}</span>
+          <span class="h-val" style="${out ? 'color:#E0785F;font-weight:700;' : ''}">${r.value}${r.unit ? " " + r.unit : ""}</span>
+        </div>
+      `;
+      }).join("");
+      detailHistoryList.querySelectorAll(".history-row[data-test-name]").forEach(el => {
+        el.addEventListener("click", () => {
+          const name = el.dataset.testName;
+          openMetricDetail(name, name, true);
+        });
+      });
+    } catch (e) {
+      detailHistoryList.innerHTML = `<div style="color:var(--text-dim);">Не удалось загрузить данные</div>`;
+    }
+    return;
+  }
+
+  if (isMeds) {
+    detailTitle.textContent = "История приёмов";
+    try {
+      const rows = await apiFetch(`/therapy/history`, { method: "GET" });
+      if (!Array.isArray(rows) || !rows.length) {
+        detailValue.textContent = "—";
+        detailHistoryList.innerHTML = `<div style="color:var(--text-dim);padding:20px 0;">Записей пока нет</div>`;
+        return;
+      }
+      detailValue.textContent = rows[0].name;
+      const statusLabel = { on_time: "вовремя", late: "с опозданием", no_schedule: "" };
+      detailHistoryList.innerHTML = rows.map(r => `
+        <div class="history-row">
+          <span class="h-date">${formatTime(r.taken_at)} — ${r.name}${r.dose ? " " + r.dose : ""}</span>
+          <span class="h-val" style="color:${r.status === 'late' ? 'var(--danger)' : 'var(--text-dim)'};">${statusLabel[r.status] || ""}</span>
+        </div>
+      `).join("");
+    } catch (e) {
+      detailHistoryList.innerHTML = `<div style="color:var(--text-dim);">Не удалось загрузить данные</div>`;
+    }
+    return;
+  }
 
   try {
     if (currentMetricIsBp) {
@@ -507,15 +642,25 @@ async function openMetricDetail(field, label) {
       const toPairs = (d) => (d?.points || []).map(p => [p.date, p.value]);
       currentMetricSeries = { sys: toPairs(sysData), dia: toPairs(diaData) };
       currentMetricMeta = {};
+      currentMetricBands = { sys: CLINICAL_BANDS.bp_sys, dia: CLINICAL_BANDS.bp_dia };
+      currentMetricBand = null;
+      detailRange.textContent = "Ориентировочные диапазоны, не диагноз";
     } else {
       const data = await apiFetch(`/metric/history?field=${encodeURIComponent(field)}`, { method: "GET" });
       if (!data || data.error) throw new Error("bad response");
       currentMetricSeries = (data.points || []).map(p => [p.date, p.value]);
       currentMetricMeta = data;
+      currentMetricBands = null;
+
       if (data.reference_low != null && data.reference_high != null) {
-        detailRange.textContent = `Референс: ${data.reference_low}–${data.reference_high}${data.unit ? " " + data.unit : ""}`;
+        currentMetricBand = { low: data.reference_low, high: data.reference_high, label: `референс: ${data.reference_low}–${data.reference_high}${data.unit ? " " + data.unit : ""}` };
       } else if (data.target_low != null && data.target_high != null) {
-        detailRange.textContent = `Цель: ${data.target_low}–${data.target_high}${data.unit ? " " + data.unit : ""}`;
+        currentMetricBand = { low: data.target_low, high: data.target_high, label: `цель: ${data.target_low}–${data.target_high}${data.unit ? " " + data.unit : ""}` };
+      } else if (field === "pulse") {
+        currentMetricBand = CLINICAL_BANDS.pulse;
+        detailRange.textContent = "Ориентировочный диапазон, не диагноз";
+      } else {
+        currentMetricBand = null;
       }
     }
   } catch (e) {
