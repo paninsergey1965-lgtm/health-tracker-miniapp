@@ -294,34 +294,34 @@ async function refreshDashboard() {
   const chips = [
     {
       label: "Вес",
-      field: "weight_kg",
+      field: "weight",
       value: latest.weight_kg != null ? `${latest.weight_kg}кг` : "—",
       has: latest.weight_kg != null,
     },
     {
       label: "Давление",
-      field: "blood_pressure",
+      field: "bp",
       value: latest.blood_pressure || "—",
       has: !!latest.blood_pressure,
       notable: latest.blood_pressure_notable,
     },
     {
       label: "Пульс",
-      field: "resting_pulse",
+      field: "pulse",
       value: latest.resting_pulse != null ? `${latest.resting_pulse}` : "—",
       has: latest.resting_pulse != null,
       notable: latest.resting_pulse_notable,
     },
     {
       label: "Тестостерон",
-      field: "testosterone",
+      field: "тестостерон общ",
       value: latest.testosterone != null ? `${latest.testosterone}` : "—",
       has: latest.testosterone != null,
       notable: latest.testosterone_status && latest.testosterone_status !== "within",
     },
     {
       label: "Калории",
-      field: "calories",
+      field: null,
       value: today.calories != null ? `${Math.round(today.calories)}` : "—",
       has: today.calories != null,
     },
@@ -368,22 +368,43 @@ document.getElementById("detail-back").addEventListener("click", () => {
 
 let currentMetricSeries = [];
 let currentMetricMeta = {};
+let currentMetricIsBp = false;
 
 function filterByPeriod(series, period) {
-  if (period === "all" || !series.length) return series;
+  if (period === "all") return series;
   const now = new Date();
   const cutoff = new Date(now);
   if (period === "7d") cutoff.setDate(now.getDate() - 7);
   else if (period === "30d") cutoff.setDate(now.getDate() - 30);
   else if (period === "3m") cutoff.setMonth(now.getMonth() - 3);
   else if (period === "1y") cutoff.setFullYear(now.getFullYear() - 1);
-  return series.filter(p => {
+
+  const cut = (arr) => (arr || []).filter(p => {
     const d = new Date(Array.isArray(p) ? p[0] : p.date);
     return d >= cutoff;
   });
+
+  if (currentMetricIsBp) {
+    return { sys: cut(series.sys), dia: cut(series.dia) };
+  }
+  return cut(series);
+}
+
+function buildLinePath(points, yMin, yMax, W, H) {
+  const coords = points.map((p, i) => {
+    const x = points.length === 1 ? W / 2 : (i / (points.length - 1)) * W;
+    const y = H - ((parseFloat(p[1]) - yMin) / (yMax - yMin)) * H;
+    return [x, y];
+  });
+  const pathD = coords.map((c, i) => (i === 0 ? "M" : "L") + c[0].toFixed(1) + "," + c[1].toFixed(1)).join(" ");
+  return { coords, pathD };
 }
 
 function renderDetailChart(series) {
+  if (currentMetricIsBp) {
+    renderBpChart(series);
+    return;
+  }
   const points = (series || []).map(p => Array.isArray(p) ? p : [p.date, p.value]);
   if (!points.length) {
     detailChartWrap.innerHTML = `<div style="color:var(--text-dim);padding:20px 0;">Нет данных за этот период</div>`;
@@ -397,12 +418,7 @@ function renderDetailChart(series) {
   const yMin = min - pad, yMax = max + pad;
   const W = 320, H = 160;
 
-  const coords = points.map((p, i) => {
-    const x = points.length === 1 ? W / 2 : (i / (points.length - 1)) * W;
-    const y = H - ((parseFloat(p[1]) - yMin) / (yMax - yMin)) * H;
-    return [x, y];
-  });
-  const pathD = coords.map((c, i) => (i === 0 ? "M" : "L") + c[0].toFixed(1) + "," + c[1].toFixed(1)).join(" ");
+  const { coords, pathD } = buildLinePath(points, yMin, yMax, W, H);
   const dots = coords.map(c => `<circle cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" r="3" fill="#4FB8A6"/>`).join("");
 
   detailChartWrap.innerHTML = `
@@ -423,32 +439,90 @@ function renderDetailChart(series) {
   `).join("");
 }
 
+function renderBpChart(series) {
+  const sysPoints = (series.sys || []).map(p => Array.isArray(p) ? p : [p.date, p.value]);
+  const diaPoints = (series.dia || []).map(p => Array.isArray(p) ? p : [p.date, p.value]);
+  if (!sysPoints.length && !diaPoints.length) {
+    detailChartWrap.innerHTML = `<div style="color:var(--text-dim);padding:20px 0;">Нет данных за этот период</div>`;
+    detailHistoryList.innerHTML = "";
+    return;
+  }
+  const allValues = [...sysPoints, ...diaPoints].map(p => parseFloat(p[1])).filter(v => !isNaN(v));
+  const min = Math.min(...allValues);
+  const max = Math.max(...allValues);
+  const pad = (max - min) * 0.15 || 5;
+  const yMin = min - pad, yMax = max + pad;
+  const W = 320, H = 160;
+
+  const sys = buildLinePath(sysPoints, yMin, yMax, W, H);
+  const dia = buildLinePath(diaPoints, yMin, yMax, W, H);
+  const sysDots = sys.coords.map(c => `<circle cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" r="2.5" fill="#4FB8A6"/>`).join("");
+  const diaDots = dia.coords.map(c => `<circle cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" r="2.5" fill="#E0785F"/>`).join("");
+
+  detailChartWrap.innerHTML = `
+    <div style="display:flex;gap:14px;font-size:12px;color:var(--text-dim);margin-bottom:6px;">
+      <span><span style="color:#4FB8A6;">●</span> систолическое</span>
+      <span><span style="color:#E0785F;">●</span> диастолическое</span>
+    </div>
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+      <path d="${sys.pathD}" fill="none" stroke="#4FB8A6" stroke-width="2.5" vector-effect="non-scaling-stroke"/>
+      <path d="${dia.pathD}" fill="none" stroke="#E0785F" stroke-width="2.5" vector-effect="non-scaling-stroke"/>
+      ${sysDots}${diaDots}
+    </svg>
+  `;
+
+  const lastSys = sysPoints[sysPoints.length - 1];
+  const lastDia = diaPoints[diaPoints.length - 1];
+  detailValue.textContent = (lastSys && lastDia) ? `${lastSys[1]}/${lastDia[1]}` : "—";
+
+  const byDate = {};
+  sysPoints.forEach(p => { byDate[p[0]] = byDate[p[0]] || {}; byDate[p[0]].sys = p[1]; });
+  diaPoints.forEach(p => { byDate[p[0]] = byDate[p[0]] || {}; byDate[p[0]].dia = p[1]; });
+  const dates = Object.keys(byDate).sort().reverse();
+
+  detailHistoryList.innerHTML = dates.map(d => `
+    <div class="history-row">
+      <span class="h-date">${formatTime(d)}</span>
+      <span class="h-val">${byDate[d].sys ?? "—"}/${byDate[d].dia ?? "—"}</span>
+    </div>
+  `).join("");
+}
+
 async function openMetricDetail(field, label) {
   detailTitle.textContent = label;
   detailValue.textContent = "…";
   detailRange.textContent = "";
   detailChartWrap.innerHTML = "";
   detailHistoryList.innerHTML = "";
+  currentMetricIsBp = (field === "bp");
   periodTabs.querySelectorAll("button").forEach(b => b.classList.toggle("active", b.dataset.period === "all"));
   metricDetail.classList.add("open");
 
-  let data;
   try {
-    data = await apiFetch(`/metric/history?field=${encodeURIComponent(field)}`, { method: "GET" });
+    if (currentMetricIsBp) {
+      const [sysData, diaData] = await Promise.all([
+        apiFetch(`/metric/history?field=bp_sys`, { method: "GET" }),
+        apiFetch(`/metric/history?field=bp_dia`, { method: "GET" }),
+      ]);
+      const toPairs = (d) => (d?.points || []).map(p => [p.date, p.value]);
+      currentMetricSeries = { sys: toPairs(sysData), dia: toPairs(diaData) };
+      currentMetricMeta = {};
+    } else {
+      const data = await apiFetch(`/metric/history?field=${encodeURIComponent(field)}`, { method: "GET" });
+      if (!data || data.error) throw new Error("bad response");
+      currentMetricSeries = (data.points || []).map(p => [p.date, p.value]);
+      currentMetricMeta = data;
+      if (data.reference_low != null && data.reference_high != null) {
+        detailRange.textContent = `Референс: ${data.reference_low}–${data.reference_high}${data.unit ? " " + data.unit : ""}`;
+      } else if (data.target_low != null && data.target_high != null) {
+        detailRange.textContent = `Цель: ${data.target_low}–${data.target_high}${data.unit ? " " + data.unit : ""}`;
+      }
+    }
   } catch (e) {
     detailChartWrap.innerHTML = `<div style="color:var(--text-dim);">Не удалось загрузить данные</div>`;
     return;
   }
-  if (!data || data.error) {
-    detailChartWrap.innerHTML = `<div style="color:var(--text-dim);">Не удалось загрузить данные</div>`;
-    return;
-  }
 
-  currentMetricSeries = data.series || data.points || [];
-  currentMetricMeta = data;
-  if (data.reference_range || data.target_range) {
-    detailRange.textContent = `Референс: ${data.reference_range || data.target_range}`;
-  }
   renderDetailChart(currentMetricSeries);
 }
 
