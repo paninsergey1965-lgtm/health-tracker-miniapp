@@ -212,10 +212,32 @@ function addTextCard(text, transcript) {
 }
 
 // --- Голосовой ответ ---
+// iOS разрешает audio.play() без ограничений только если он вызван прямо в обработчике
+// нажатия пользователя. Поэтому "разблокируем" один и тот же Audio-объект в момент тапа
+// на микрофон, а потом просто меняем ему src и снова play() — так iOS обычно пропускает.
+const SILENT_WAV = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+let replyAudio = null;
+
+function unlockAudio() {
+  try {
+    replyAudio = new Audio(SILENT_WAV);
+    replyAudio.play().catch(() => {});
+  } catch (e) {}
+}
+
 function playVoiceReply(base64) {
   if (!base64) return;
-  const audio = new Audio("data:audio/mpeg;base64," + base64);
-  audio.play().catch(() => {});
+  try {
+    if (replyAudio) {
+      replyAudio.src = "data:audio/mpeg;base64," + base64;
+      replyAudio.play().catch(() => {
+        // если даже разблокированный объект не смог — пробуем создать новый как fallback
+        new Audio("data:audio/mpeg;base64," + base64).play().catch(() => {});
+      });
+    } else {
+      new Audio("data:audio/mpeg;base64," + base64).play().catch(() => {});
+    }
+  } catch (e) {}
 }
 
 // --- SVG-график ---
@@ -350,6 +372,7 @@ let mediaRecorder, audioChunks = [], isRecording = false;
 
 micBtn.onclick = async () => {
   if (!isRecording) {
+    unlockAudio();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaRecorder = new MediaRecorder(stream);
