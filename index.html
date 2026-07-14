@@ -74,9 +74,10 @@
   }
   .btn-primary { background: var(--accent); color: #06201C; flex: 1; }
   .btn-ghost { background: transparent; color: var(--text-dim); border: 1px solid var(--border); }
-  .chart-list { list-style: none; margin: 0; padding: 0; }
-  .chart-list li { display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px; }
-  .chart-list li span:last-child { color: var(--accent); font-weight: 600; }
+
+  .chart-wrap svg { width: 100%; height: 110px; display: block; }
+  .chart-meta { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-dim); margin-top: 6px; }
+  .chart-value { font-size: 24px; font-weight: 700; margin: 2px 0 8px; }
 
   #bottom-bar {
     flex-shrink: 0; padding: 14px 20px calc(14px + env(safe-area-inset-bottom));
@@ -210,14 +211,53 @@ function addTextCard(text, transcript) {
   scrollFeedDown();
 }
 
+// --- Голосовой ответ ---
+function playVoiceReply(base64) {
+  if (!base64) return;
+  const audio = new Audio("data:audio/mpeg;base64," + base64);
+  audio.play().catch(() => {});
+}
+
+// --- SVG-график ---
 function addChartCard(field, series) {
   const el = document.createElement("div");
-  el.className = "card system";
-  const rows = (series || []).slice(-8).map(p => {
-    const [date, value] = Array.isArray(p) ? p : [p.date, p.value];
-    return `<li><span>${date}</span><span>${value}</span></li>`;
-  }).join("");
-  el.innerHTML = `<div class="card-title">${field}</div><ul class="chart-list">${rows || "<li>Нет данных</li>"}</ul>`;
+  el.className = "card system chart-wrap";
+
+  const points = (series || []).map(p => Array.isArray(p) ? p : [p.date, p.value]);
+  if (!points.length) {
+    el.innerHTML = `<div class="card-title">${field}</div><div>Нет данных</div>`;
+    feed.appendChild(el);
+    scrollFeedDown();
+    return;
+  }
+
+  const values = points.map(p => parseFloat(p[1]));
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const pad = (max - min) * 0.15 || 1;
+  const yMin = min - pad, yMax = max + pad;
+  const W = 300, H = 100;
+
+  const coords = points.map((p, i) => {
+    const x = points.length === 1 ? W / 2 : (i / (points.length - 1)) * W;
+    const y = H - ((parseFloat(p[1]) - yMin) / (yMax - yMin)) * H;
+    return [x, y];
+  });
+  const pathD = coords.map((c, i) => (i === 0 ? "M" : "L") + c[0].toFixed(1) + "," + c[1].toFixed(1)).join(" ");
+  const dots = coords.map(c => `<circle cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" r="2.5" fill="#4FB8A6"/>`).join("");
+
+  const last = points[points.length - 1];
+  const first = points[0];
+
+  el.innerHTML = `
+    <div class="card-title">${field}</div>
+    <div class="chart-value">${last[1]}</div>
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+      <path d="${pathD}" fill="none" stroke="#4FB8A6" stroke-width="2.5" vector-effect="non-scaling-stroke"/>
+      ${dots}
+    </svg>
+    <div class="chart-meta"><span>${first[0]}</span><span>${last[0]}</span></div>
+  `;
   feed.appendChild(el);
   scrollFeedDown();
 }
@@ -263,7 +303,6 @@ function addConfirmCard(type, payload) {
 
   const [saveBtn, cancelBtn] = el.querySelectorAll("button");
   saveBtn.onclick = async () => {
-    // собрать отредактированные значения обратно в payload
     el.querySelectorAll("input").forEach(input => {
       const val = parseFloat(input.value.replace(",", ".")) || input.value;
       if (type === "labs_confirm") {
@@ -292,8 +331,10 @@ function addConfirmCard(type, payload) {
 function handleApiResponse(data) {
   if (data.type === "text") {
     addTextCard(data.payload.text, data.transcript);
+    playVoiceReply(data.audio_base64);
   } else if (data.type === "chart") {
     addChartCard(data.payload.field, data.payload.series);
+    playVoiceReply(data.audio_base64);
   } else if (["vitals_confirm", "labs_confirm", "food_confirm"].includes(data.type)) {
     addConfirmCard(data.type, data.payload);
   } else if (data.type === "unrecognized") {
