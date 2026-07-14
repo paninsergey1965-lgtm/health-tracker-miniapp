@@ -37,6 +37,28 @@
   header .date {
     font-size: 13px; color: var(--text-dim);
   }
+
+  #summary-strip {
+    display: flex; gap: 10px; overflow-x: auto; padding: 4px 20px 14px;
+    flex-shrink: 0; -webkit-overflow-scrolling: touch;
+  }
+  #summary-strip::-webkit-scrollbar { display: none; }
+  .summary-chip {
+    flex-shrink: 0; width: 72px; display: flex; flex-direction: column; align-items: center;
+    gap: 4px;
+  }
+  .summary-circle {
+    width: 56px; height: 56px; border-radius: 50%;
+    background: var(--bg-elevated); border: 2px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; text-align: center; line-height: 1.1;
+    color: var(--text);
+  }
+  .summary-circle.has-value { border-color: var(--accent); }
+  .summary-circle.notable { border-color: var(--danger); }
+  .summary-label {
+    font-size: 10px; color: var(--text-dim); text-align: center;
+  }
   #feed {
     flex: 1; overflow-y: auto; padding: 8px 16px 16px;
     display: flex; flex-direction: column; gap: 10px;
@@ -131,6 +153,8 @@
     <div class="date" id="date-line"></div>
   </header>
 
+  <div id="summary-strip"></div>
+
   <div id="feed"></div>
 
   <div id="status-toast"></div>
@@ -183,6 +207,77 @@ document.getElementById("date-line").textContent = new Date().toLocaleDateString
 
 const feed = document.getElementById("feed");
 const toast = document.getElementById("status-toast");
+const summaryStrip = document.getElementById("summary-strip");
+
+// --- Сводка показателей вверху (кольца) — читается из базы, не пропадает при закрытии ---
+function formatTime(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+}
+
+async function refreshDashboard() {
+  let data;
+  try {
+    data = await apiFetch("/dashboard", { method: "GET" });
+  } catch (e) {
+    return;
+  }
+  if (!data || data.error) return;
+
+  const latest = data.latest || {};
+  const today = data.today || {};
+
+  const chips = [
+    {
+      label: "Вес",
+      value: latest.weight_kg != null ? `${latest.weight_kg}кг` : "—",
+      has: latest.weight_kg != null,
+    },
+    {
+      label: "Давление",
+      value: latest.blood_pressure || "—",
+      has: !!latest.blood_pressure,
+      notable: latest.blood_pressure_notable,
+    },
+    {
+      label: "Пульс",
+      value: latest.resting_pulse != null ? `${latest.resting_pulse}` : "—",
+      has: latest.resting_pulse != null,
+      notable: latest.resting_pulse_notable,
+    },
+    {
+      label: "Тестостерон",
+      value: latest.testosterone != null ? `${latest.testosterone}` : "—",
+      has: latest.testosterone != null,
+      notable: latest.testosterone_status && latest.testosterone_status !== "within",
+    },
+    {
+      label: "Калории",
+      value: today.calories != null ? `${Math.round(today.calories)}` : "—",
+      has: today.calories != null,
+    },
+    {
+      label: "Шаги",
+      value: today.steps != null ? `${today.steps}` : "—",
+      has: today.steps != null,
+    },
+    {
+      label: today.last_medication ? today.last_medication.name : "Препарат",
+      value: today.last_medication ? formatTime(today.last_medication.taken_at) : "—",
+      has: !!today.last_medication,
+    },
+  ];
+
+  summaryStrip.innerHTML = chips.map(c => `
+    <div class="summary-chip">
+      <div class="summary-circle ${c.has ? 'has-value' : ''} ${c.notable ? 'notable' : ''}">${c.value}</div>
+      <div class="summary-label">${c.label}</div>
+    </div>
+  `).join("");
+}
+
+refreshDashboard();
 
 function showToast(text, ms = 2500) {
   toast.textContent = text;
@@ -341,8 +436,12 @@ function addConfirmCard(type, payload) {
       body: JSON.stringify({ type, payload }),
     });
     el.remove();
-    if (res.saved) addTextCard("✅ Сохранено");
-    else addTextCard("Не удалось сохранить, попробуй ещё раз");
+    if (res.saved) {
+      addTextCard("✅ Сохранено");
+      refreshDashboard();
+    } else {
+      addTextCard("Не удалось сохранить, попробуй ещё раз");
+    }
   };
   cancelBtn.onclick = () => el.remove();
 
@@ -354,6 +453,7 @@ function handleApiResponse(data) {
   if (data.type === "text") {
     addTextCard(data.payload.text, data.transcript);
     playVoiceReply(data.audio_base64);
+    refreshDashboard();
   } else if (data.type === "chart") {
     addChartCard(data.payload.field, data.payload.series);
     playVoiceReply(data.audio_base64);
