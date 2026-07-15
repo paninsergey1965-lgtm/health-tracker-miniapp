@@ -372,6 +372,8 @@ function formatTime(iso) {
   return d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
 }
 
+let lastDashboardData = null;
+
 async function refreshDashboard() {
   let data;
   try {
@@ -380,6 +382,7 @@ async function refreshDashboard() {
     return;
   }
   if (!data || data.error) return;
+  lastDashboardData = data;
 
   const latest = data.latest || {};
   const today = data.today || {};
@@ -985,6 +988,30 @@ const reminderTicker = document.getElementById("reminder-ticker");
 const reminderTrack = document.getElementById("reminder-ticker-track");
 let lastReminders = { missing_today: [], injections: [] };
 
+const ONBOARDING_TIPS = [
+  "Скажи голосом «вес 80» — запишу",
+  "Сфотографируй тонометр — распознаю сам",
+  "Точки под датами — показывают, где была активность",
+  "Тапни на любой кружок — откроется график",
+  "Пришли фото анализов или еды — разберу автоматически",
+];
+
+const STATUS_TIPS = [
+  "Все приёмы сегодня отмечены",
+  "Тапни на день в календаре — увидишь, что было",
+  "Разверни месяц стрелкой справа от дат",
+  "Кружок «Анализы» — все твои показатели в одном месте",
+];
+
+function hasAnyRealData() {
+  const latest = lastDashboardData?.latest || {};
+  const today = lastDashboardData?.today || {};
+  return latest.weight_kg != null || latest.blood_pressure != null ||
+         latest.resting_pulse != null || latest.testosterone != null ||
+         today.calories != null || today.steps != null ||
+         !!today.last_medication;
+}
+
 async function refreshReminders() {
   try {
     lastReminders = await apiFetch(`/reminders`, { method: "GET" });
@@ -998,19 +1025,24 @@ async function refreshReminders() {
     else parts.push(`До укола ${i.compound}: ${i.days_left} дн.`);
   });
 
-  if (!parts.length) {
-    reminderTicker.classList.remove("show");
+  reminderTicker.classList.add("show");
+
+  if (parts.length) {
+    reminderTrack.style.color = "var(--danger)";
+    reminderTrack.innerHTML = parts.map(p => `<span>${p}</span>`).join("");
     return;
   }
-  reminderTicker.classList.add("show");
-  reminderTrack.innerHTML = parts.map(p => `<span>${p}</span>`).join("");
+
+  const fallback = hasAnyRealData() ? STATUS_TIPS : ONBOARDING_TIPS;
+  reminderTrack.style.color = "var(--text-dim)";
+  reminderTrack.innerHTML = fallback.map(p => `<span>${p}</span>`).join("");
 }
 
 reminderTicker.addEventListener("click", () => {
   openMetricDetail("__reminders__", "Напоминания");
 });
 
-refreshReminders();
+refreshDashboard().then(refreshReminders);
 
 function showToast(text, ms = 2500) {
   toast.textContent = text;
