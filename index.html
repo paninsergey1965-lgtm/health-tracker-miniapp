@@ -823,7 +823,9 @@ function renderDetailChart(series) {
     bandSvg += `<rect x="0" y="${yHigh.toFixed(1)}" width="${W}" height="${(yLow-yHigh).toFixed(1)}" fill="#34C759" opacity="0.08"/>`;
     bandSvg += `<line x1="0" y1="${yHigh.toFixed(1)}" x2="${W}" y2="${yHigh.toFixed(1)}" stroke="#e5e5ea" stroke-width="1"/>`;
     bandSvg += `<line x1="0" y1="${yLow.toFixed(1)}" x2="${W}" y2="${yLow.toFixed(1)}" stroke="#e5e5ea" stroke-width="1"/>`;
-    coords.forEach((c) => {
+    const labelIdxs = coords.length > 1 ? [0, coords.length - 1] : [0];
+    labelIdxs.forEach((i) => {
+      const c = coords[i];
       bandSvg += `<text x="${c[0].toFixed(1)}" y="${(yHigh-8).toFixed(1)}" text-anchor="middle" font-size="10" fill="#c7c7cc">${band.high}</text>`;
       bandSvg += `<text x="${c[0].toFixed(1)}" y="${(yLow+14).toFixed(1)}" text-anchor="middle" font-size="10" fill="#c7c7cc">${band.low}</text>`;
     });
