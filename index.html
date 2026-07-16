@@ -181,7 +181,13 @@
     font-size: 13px; cursor: pointer;
   }
   .period-tabs button.active { background: var(--accent); border-color: var(--accent); color: #06201C; font-weight: 600; }
-  #metric-detail .detail-chart-wrap svg { width: 100%; height: 160px; display: block; }
+  #metric-detail .detail-chart-wrap svg { display: block; }
+  .lab-card { background:#fff; color:#1c1c1e; border-radius:18px; padding:16px 0 14px; margin-bottom:14px; }
+  .lab-card .lab-head { padding:0 18px 12px; }
+  .lab-card .lab-name { font-size:15px; font-weight:700; }
+  .lab-card .lab-range { font-size:12px; color:#8e8e93; margin-top:2px; }
+  .chart-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  .chart-inner { padding:0 18px; }
   .detail-history { margin-top: 18px; }
   .detail-history h3 { font-size: 13px; color: var(--text-dim); font-weight: 600; margin-bottom: 8px; }
   .history-row {
@@ -784,30 +790,65 @@ function renderDetailChart(series) {
   const values = points.map(p => parseFloat(p[1])).filter(v => !isNaN(v));
   const band = currentMetricBand;
   const { yMin, yMax } = computeYRange([values], [band]);
-  const W = 320, H = 160;
 
-  const { coords, pathD } = buildLinePath(points, yMin, yMax, W, H);
+  const stepX = 90, padTop = 26, padBottom = 26, padLeft = 10, padRight = 10;
+  const W = Math.max(320, points.length * stepX + padLeft + padRight);
+  const H = 160;
+  const innerH = H - padTop - padBottom;
+
+  const coords = points.map((p, i) => {
+    const x = points.length === 1 ? W / 2 : padLeft + i * stepX;
+    const v = parseFloat(p[1]);
+    const y = padTop + (1 - (v - yMin) / (yMax - yMin)) * innerH;
+    return [x, y];
+  });
+  const pathD = buildMonotonePath(coords);
+
   const dots = coords.map((c, i) => {
     const v = parseFloat(points[i][1]);
-    const color = isOut(v, band) ? "#E0785F" : "#4FB8A6";
-    const r = isOut(v, band) ? 4 : 3;
-    return `<circle cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" r="${r}" fill="${color}"/>`;
+    const out = isOut(v, band);
+    const color = out ? "#FF6B35" : "#34C759";
+    const r = out ? 4 : 3;
+    return `
+      <circle cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" r="${r}" fill="${color}"/>
+      <text x="${c[0].toFixed(1)}" y="${(c[1]-10).toFixed(1)}" text-anchor="middle" font-size="12" font-weight="700" fill="${color}">${points[i][1]}</text>
+      <text x="${c[0].toFixed(1)}" y="${H-6}" text-anchor="middle" font-size="10" fill="#8e8e93">${formatTime(points[i][0])}</text>
+    `;
   }).join("");
 
+  let bandSvg = "";
+  if (band) {
+    const yHigh = padTop + (1 - (band.high - yMin) / (yMax - yMin)) * innerH;
+    const yLow = padTop + (1 - (band.low - yMin) / (yMax - yMin)) * innerH;
+    bandSvg += `<rect x="0" y="${yHigh.toFixed(1)}" width="${W}" height="${(yLow-yHigh).toFixed(1)}" fill="#34C759" opacity="0.08"/>`;
+    bandSvg += `<line x1="0" y1="${yHigh.toFixed(1)}" x2="${W}" y2="${yHigh.toFixed(1)}" stroke="#e5e5ea" stroke-width="1"/>`;
+    bandSvg += `<line x1="0" y1="${yLow.toFixed(1)}" x2="${W}" y2="${yLow.toFixed(1)}" stroke="#e5e5ea" stroke-width="1"/>`;
+    coords.forEach((c) => {
+      bandSvg += `<text x="${c[0].toFixed(1)}" y="${(yHigh-8).toFixed(1)}" text-anchor="middle" font-size="10" fill="#c7c7cc">${band.high}</text>`;
+      bandSvg += `<text x="${c[0].toFixed(1)}" y="${(yLow+14).toFixed(1)}" text-anchor="middle" font-size="10" fill="#c7c7cc">${band.low}</text>`;
+    });
+  }
+
   detailChartWrap.innerHTML = `
-    ${band ? `<div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;"><span style="color:#4FB8A6;">▬</span> ${band.label}</div>` : ""}
-    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
-      ${bandRectSvg(band, yMin, yMax, W, H)}
-      ${axisLabelsSvg(yMin, yMax, H, W)}
-      <path d="${pathD}" fill="none" stroke="#4FB8A6" stroke-width="2.5" vector-effect="non-scaling-stroke"/>
-      ${dots}
-    </svg>
+    <div class="lab-card">
+      <div class="chart-scroll" id="detail-chart-scroll">
+        <div class="chart-inner">
+          <svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+            ${bandSvg}
+            <path d="${pathD}" fill="none" stroke="#34C759" stroke-width="2" stroke-linecap="round"/>
+            ${dots}
+          </svg>
+        </div>
+      </div>
+    </div>
   `;
+  const scrollEl = document.getElementById("detail-chart-scroll");
+  if (scrollEl) scrollEl.scrollLeft = 9999;
 
   const last = points[points.length - 1];
   const lastOut = isOut(parseFloat(last[1]), band);
   detailValue.innerHTML = lastOut
-    ? `${last[1]} <span style="font-size:14px;color:#E0785F;">вне нормы</span>`
+    ? `${last[1]} <span style="font-size:14px;color:#FF6B35;">вне нормы</span>`
     : `${last[1]}`;
 
   detailHistoryList.innerHTML = points.slice().reverse().map(p => {
@@ -815,9 +856,9 @@ function renderDetailChart(series) {
     return `
     <div class="history-row">
       <span class="h-date">${formatTime(p[0])}</span>
-      <span class="h-val" style="${out ? 'color:#E0785F;font-weight:700;' : ''}">${p[1]}</span>
+      <span class="h-val" style="${out ? 'color:#FF6B35;font-weight:700;' : ''}">${p[1]}</span>
     </div>
-  `;
+    `;
   }).join("");
 }
 
