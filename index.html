@@ -874,279 +874,100 @@ function renderBpChart(series) {
   }
   const sysBand = currentMetricBands?.sys || null;
   const diaBand = currentMetricBands?.dia || null;
-  const sysValues = sysPoints.map(p => parseFloat(p[1]));
-  const diaValues = diaPoints.map(p => parseFloat(p[1]));
+  const sysValues = sysPoints.map(p => parseFloat(p[1])).filter(v => !isNaN(v));
+  const diaValues = diaPoints.map(p => parseFloat(p[1])).filter(v => !isNaN(v));
   const { yMin, yMax } = computeYRange([sysValues, diaValues], [sysBand, diaBand]);
-  const W = 320, H = 160;
 
-  const sys = buildLinePath(sysPoints, yMin, yMax, W, H);
-  const dia = buildLinePath(diaPoints, yMin, yMax, W, H);
-  const sysDots = sys.coords.map((c, i) => {
-    const v = sysValues[i];
-    const out = isOut(v, sysBand);
-    return `<circle cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" r="${out ? 4 : 2.5}" fill="${out ? '#E0785F' : '#4FB8A6'}"/>`;
+  const maxLen = Math.max(sysPoints.length, diaPoints.length);
+  const stepX = 90, padTop = 26, padBottom = 26, padLeft = 10, padRight = 10;
+  const W = Math.max(320, maxLen * stepX + padLeft + padRight);
+  const H = 160;
+  const innerH = H - padTop - padBottom;
+
+  function toCoords(points) {
+    return points.map((p, i) => {
+      const x = maxLen === 1 ? W / 2 : padLeft + i * stepX;
+      const v = parseFloat(p[1]);
+      const y = padTop + (1 - (v - yMin) / (yMax - yMin)) * innerH;
+      return [x, y];
+    });
+  }
+  const sysCoords = toCoords(sysPoints);
+  const diaCoords = toCoords(diaPoints);
+  const sysPathD = buildMonotonePath(sysCoords);
+  const diaPathD = buildMonotonePath(diaCoords);
+
+  function makeDots(coords, points, band, color) {
+    return coords.map((c, i) => {
+      const v = parseFloat(points[i][1]);
+      const out = isOut(v, band);
+      const dotColor = out ? "#FF6B35" : color;
+      const r = out ? 4 : 3;
+      return `
+        <circle cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" r="${r}" fill="${dotColor}"/>
+        <text x="${c[0].toFixed(1)}" y="${(c[1]-10).toFixed(1)}" text-anchor="middle" font-size="11" font-weight="700" fill="${dotColor}">${points[i][1]}</text>
+      `;
+    }).join("");
+  }
+  const sysDots = makeDots(sysCoords, sysPoints, sysBand, "#34C759");
+  const diaDots = makeDots(diaCoords, diaPoints, diaBand, "#4FB8A6");
+  const allDates = maxLen === sysPoints.length ? sysPoints : diaPoints;
+  const dateLabels = (maxLen > 0 ? allDates : []).map((p, i) => {
+    const x = maxLen === 1 ? W / 2 : padLeft + i * stepX;
+    return `<text x="${x.toFixed(1)}" y="${H-6}" text-anchor="middle" font-size="10" fill="#8e8e93">${formatTime(p[0])}</text>`;
   }).join("");
-  const diaDots = dia.coords.map((c, i) => {
-    const v = diaValues[i];
-    const out = isOut(v, diaBand);
-    return `<circle cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" r="${out ? 4 : 2.5}" fill="${out ? '#E0785F' : '#E8A57A'}"/>`;
-  }).join("");
+
+  const legend = `
+    <div style="display:flex;gap:14px;padding:0 18px 8px;font-size:12px;color:#8e8e93;">
+      <span><span style="color:#34C759;">●</span> сист.</span>
+      <span><span style="color:#4FB8A6;">●</span> диаст.</span>
+      <span><span style="color:#FF6B35;">●</span> вне нормы</span>
+    </div>
+  `;
 
   detailChartWrap.innerHTML = `
-    <div style="display:flex;gap:14px;font-size:12px;color:var(--text-dim);margin-bottom:6px;flex-wrap:wrap;">
-      <span><span style="color:#4FB8A6;">●</span> сист. ${sysBand ? `(${sysBand.label})` : ""}</span>
-      <span><span style="color:#E8A57A;">●</span> диаст. ${diaBand ? `(${diaBand.label})` : ""}</span>
-      <span><span style="color:#E0785F;">●</span> вне ориентира</span>
+    <div class="lab-card">
+      ${legend}
+      <div class="chart-scroll" id="detail-chart-scroll">
+        <div class="chart-inner">
+          <svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+            <path d="${sysPathD}" fill="none" stroke="#34C759" stroke-width="2" stroke-linecap="round"/>
+            <path d="${diaPathD}" fill="none" stroke="#4FB8A6" stroke-width="2" stroke-linecap="round"/>
+            ${dateLabels}
+            ${sysDots}
+            ${diaDots}
+          </svg>
+        </div>
+      </div>
     </div>
-    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
-      ${bandRectSvg(sysBand, yMin, yMax, W, H)}
-      ${axisLabelsSvg(yMin, yMax, H, W)}
-      <path d="${sys.pathD}" fill="none" stroke="#4FB8A6" stroke-width="2.5" vector-effect="non-scaling-stroke"/>
-      <path d="${dia.pathD}" fill="none" stroke="#E8A57A" stroke-width="2.5" vector-effect="non-scaling-stroke"/>
-      ${sysDots}${diaDots}
-    </svg>
   `;
+  const scrollEl = document.getElementById("detail-chart-scroll");
+  if (scrollEl) scrollEl.scrollLeft = 9999;
 
   const lastSys = sysPoints[sysPoints.length - 1];
   const lastDia = diaPoints[diaPoints.length - 1];
-  detailValue.textContent = (lastSys && lastDia) ? `${lastSys[1]}/${lastDia[1]}` : "—";
+  const sysStr = lastSys ? lastSys[1] : "—";
+  const diaStr = lastDia ? lastDia[1] : "—";
+  detailValue.innerHTML = `${sysStr}/${diaStr}`;
 
-  const byDate = {};
-  sysPoints.forEach(p => { byDate[p[0]] = byDate[p[0]] || {}; byDate[p[0]].sys = p[1]; });
-  diaPoints.forEach(p => { byDate[p[0]] = byDate[p[0]] || {}; byDate[p[0]].dia = p[1]; });
-  const dates = Object.keys(byDate).sort().reverse();
-
-  detailHistoryList.innerHTML = dates.map(d => {
-    const sysOut = isOut(parseFloat(byDate[d].sys), sysBand);
-    const diaOut = isOut(parseFloat(byDate[d].dia), diaBand);
-    const flagged = sysOut || diaOut;
+  const rows = [];
+  const n = Math.max(sysPoints.length, diaPoints.length);
+  for (let i = 0; i < n; i++) {
+    const sp = sysPoints[i], dp = diaPoints[i];
+    const date = (sp && sp[0]) || (dp && dp[0]);
+    rows.push({ date, sys: sp ? sp[1] : null, dia: dp ? dp[1] : null });
+  }
+  detailHistoryList.innerHTML = rows.slice().reverse().map(r => {
+    const sysOut = r.sys != null && isOut(parseFloat(r.sys), sysBand);
+    const diaOut = r.dia != null && isOut(parseFloat(r.dia), diaBand);
+    const anyOut = sysOut || diaOut;
     return `
     <div class="history-row">
-      <span class="h-date">${formatTime(d)}</span>
-      <span class="h-val" style="${flagged ? 'color:#E0785F;font-weight:700;' : ''}">${byDate[d].sys ?? "—"}/${byDate[d].dia ?? "—"}</span>
+      <span class="h-date">${formatTime(r.date)}</span>
+      <span class="h-val" style="${anyOut ? 'color:#FF6B35;font-weight:700;' : ''}">${r.sys ?? "—"}/${r.dia ?? "—"}</span>
     </div>
-  `;
+    `;
   }).join("");
-}
-
-async function openMetricDetail(field, label, fromLabsList = false) {
-  cameFromLabsList = fromLabsList;
-  detailTitle.textContent = label;
-  detailValue.textContent = "…";
-  detailRange.textContent = "";
-  detailChartWrap.innerHTML = "";
-  detailHistoryList.innerHTML = "";
-  currentMetricIsBp = (field === "bp");
-  currentMetricBand = null;
-  currentMetricBands = null;
-  const isMeds = (field === "__meds__");
-  const isLabsList = (field === "__labs__");
-  const isDay = field.startsWith("__day__:");
-  const isReminders = (field === "__reminders__");
-  periodTabs.style.display = (isMeds || isLabsList || isDay || isReminders) ? "none" : "";
-  periodTabs.querySelectorAll("button").forEach(b => b.classList.toggle("active", b.dataset.period === "all"));
-  metricDetail.classList.add("open");
-
-  if (isDay) {
-    const iso = field.split(":")[1];
-    detailValue.textContent = "";
-    try {
-      const data = await apiFetch(`/day/${iso}`, { method: "GET" });
-      const rows = [];
-      (data.vitals || []).forEach(v => {
-        if (v.weight != null) rows.push({ label: "Вес", val: `${v.weight} кг`, time: v.time });
-        if (v.bp_sys != null && v.bp_dia != null) rows.push({ label: "Давление", val: `${v.bp_sys}/${v.bp_dia}`, time: v.time });
-        if (v.pulse != null) rows.push({ label: "Пульс", val: `${v.pulse}`, time: v.time });
-        if (v.steps != null) rows.push({ label: "Шаги", val: `${v.steps}`, time: v.time });
-        if (v.injection_compound) rows.push({ label: `💉 ${v.injection_compound}`, val: v.injection_dose || "", time: v.time });
-      });
-      (data.medications || []).forEach(m => rows.push({ label: m.name, val: m.dose || "", time: m.time }));
-      (data.labs || []).forEach(l => rows.push({ label: l.test_name, val: `${l.value}${l.unit ? " " + l.unit : ""}`, time: null }));
-
-      if (!rows.length) {
-        detailHistoryList.innerHTML = `<div style="color:var(--text-dim);padding:20px 0;">В этот день записей нет</div>`;
-        return;
-      }
-      detailHistoryList.innerHTML = rows.map(r => `
-        <div class="history-row">
-          <span class="h-date">${r.time ? formatTime(r.time) + " — " : ""}${r.label}</span>
-          <span class="h-val">${r.val}</span>
-        </div>
-      `).join("");
-    } catch (e) {
-      detailHistoryList.innerHTML = `<div style="color:var(--text-dim);">Не удалось загрузить данные</div>`;
-    }
-    return;
-  }
-
-  if (isReminders) {
-    detailValue.textContent = "";
-    try {
-      const data = lastReminders && (lastReminders.missing_today?.length || lastReminders.injections?.length)
-        ? lastReminders
-        : await apiFetch(`/reminders`, { method: "GET" });
-
-      const missing = data.missing_today || [];
-      const injections = data.injections || [];
-
-      if (!missing.length && !injections.length) {
-        detailHistoryList.innerHTML = `<div style="color:var(--text-dim);padding:20px 0;">Активных напоминаний нет</div>`;
-        return;
-      }
-
-      let html = "";
-      missing.forEach(m => {
-        html += `
-        <div class="reminder-row">
-          <span>Не принял сегодня: <b>${m.med_name}</b></span>
-          <button class="reminder-dismiss" data-dismiss="${m.med_name.replace(/"/g, '&quot;')}">Не напоминать</button>
-        </div>`;
-      });
-      injections.forEach(i => {
-        const text = i.days_left <= 0 ? `Пора: ${i.compound}` : `${i.compound}: через ${i.days_left} дн.`;
-        html += `<div class="reminder-row"><span>💉 ${text}</span></div>`;
-      });
-      detailHistoryList.innerHTML = html;
-
-      detailHistoryList.querySelectorAll(".reminder-dismiss").forEach(btn => {
-        btn.addEventListener("click", async () => {
-          btn.disabled = true;
-          btn.textContent = "...";
-          try {
-            await apiFetch(`/reminders/dismiss`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ med_name: btn.dataset.dismiss }),
-            });
-            await refreshReminders();
-            openMetricDetail("__reminders__", "Напоминания");
-          } catch (e) {
-            btn.disabled = false;
-            btn.textContent = "Не напоминать";
-          }
-        });
-      });
-    } catch (e) {
-      detailHistoryList.innerHTML = `<div style="color:var(--text-dim);">Не удалось загрузить данные</div>`;
-    }
-    return;
-  }
-
-  if (isLabsList) {
-    detailValue.textContent = "";
-    try {
-      const rows = await apiFetch(`/indicators/latest`, { method: "GET" });
-      if (!Array.isArray(rows) || !rows.length) {
-        detailHistoryList.innerHTML = `<div style="color:var(--text-dim);padding:20px 0;">Анализов пока нет</div>`;
-        return;
-      }
-      detailHistoryList.innerHTML = rows.map(r => {
-        const out = (r.reference_low != null && r.value < r.reference_low) ||
-                    (r.reference_high != null && r.value > r.reference_high);
-        return `
-        <div class="history-row" data-test-name="${r.test_name.replace(/"/g, '&quot;')}" style="cursor:pointer;">
-          <span class="h-date">${r.test_name}</span>
-          <span class="h-val" style="${out ? 'color:#E0785F;font-weight:700;' : ''}">${r.value}${r.unit ? " " + r.unit : ""}</span>
-        </div>
-      `;
-      }).join("");
-      detailHistoryList.querySelectorAll(".history-row[data-test-name]").forEach(el => {
-        el.addEventListener("click", () => {
-          const name = el.dataset.testName;
-          openMetricDetail(name, name, true);
-        });
-      });
-    } catch (e) {
-      detailHistoryList.innerHTML = `<div style="color:var(--text-dim);">Не удалось загрузить данные</div>`;
-    }
-    return;
-  }
-
-  if (isMeds) {
-    detailTitle.textContent = "История приёмов";
-    try {
-      const [pills, injections] = await Promise.all([
-        apiFetch(`/therapy/history`, { method: "GET" }),
-        apiFetch(`/therapy/injections`, { method: "GET" }),
-      ]);
-      const statusLabel = { on_time: "вовремя", late: "с опозданием", no_schedule: "" };
-
-      const pillItems = (Array.isArray(pills) ? pills : []).map(r => ({
-        label: `${r.name}${r.dose ? " " + r.dose : ""}`,
-        dateDisplay: formatTime(r.taken_at),
-        sortKey: r.taken_at,
-        status: statusLabel[r.status] || "",
-        isInjection: false,
-      }));
-      // У уколов в базе есть только дата (без точного времени), поэтому
-      // порядок среди событий одного дня — приблизительный.
-      const injectionItems = (Array.isArray(injections) ? injections : []).map(r => ({
-        label: `💉 ${r.drug}${r.dose ? " " + r.dose : ""}`,
-        dateDisplay: formatTime(r.date),
-        sortKey: `${r.date}T12:00:00`,
-        status: "",
-        isInjection: true,
-      }));
-
-      const allItems = [...pillItems, ...injectionItems].sort((a, b) =>
-        new Date(b.sortKey) - new Date(a.sortKey)
-      );
-
-      if (!allItems.length) {
-        detailValue.textContent = "—";
-        detailHistoryList.innerHTML = `<div style="color:var(--text-dim);padding:20px 0;">Записей пока нет</div>`;
-        return;
-      }
-
-      detailValue.textContent = allItems[0].label;
-      detailHistoryList.innerHTML = allItems.map(r => `
-        <div class="history-row">
-          <span class="h-date">${r.dateDisplay} — ${r.label}</span>
-          <span class="h-val" style="color:${r.status === 'с опозданием' ? 'var(--danger)' : 'var(--text-dim)'};">${r.status}</span>
-        </div>
-      `).join("");
-    } catch (e) {
-      detailHistoryList.innerHTML = `<div style="color:var(--text-dim);">Не удалось загрузить данные</div>`;
-    }
-    return;
-  }
-
-  try {
-    if (currentMetricIsBp) {
-      const [sysData, diaData] = await Promise.all([
-        apiFetch(`/metric/history?field=bp_sys`, { method: "GET" }),
-        apiFetch(`/metric/history?field=bp_dia`, { method: "GET" }),
-      ]);
-      const toPairs = (d) => (d?.points || []).map(p => [p.date, p.value]);
-      currentMetricSeries = { sys: toPairs(sysData), dia: toPairs(diaData) };
-      currentMetricMeta = {};
-      currentMetricBands = { sys: CLINICAL_BANDS.bp_sys, dia: CLINICAL_BANDS.bp_dia };
-      currentMetricBand = null;
-      detailRange.textContent = "Ориентировочные диапазоны, не диагноз";
-    } else {
-      const data = await apiFetch(`/metric/history?field=${encodeURIComponent(field)}`, { method: "GET" });
-      if (!data || data.error) throw new Error("bad response");
-      currentMetricSeries = (data.points || []).map(p => [p.date, p.value]);
-      currentMetricMeta = data;
-      currentMetricBands = null;
-
-      if (data.reference_low != null && data.reference_high != null) {
-        currentMetricBand = { low: data.reference_low, high: data.reference_high, label: `референс: ${data.reference_low}–${data.reference_high}${data.unit ? " " + data.unit : ""}` };
-      } else if (data.target_low != null && data.target_high != null) {
-        currentMetricBand = { low: data.target_low, high: data.target_high, label: `цель: ${data.target_low}–${data.target_high}${data.unit ? " " + data.unit : ""}` };
-      } else if (field === "pulse") {
-        currentMetricBand = CLINICAL_BANDS.pulse;
-        detailRange.textContent = "Ориентировочный диапазон, не диагноз";
-      } else {
-        currentMetricBand = null;
-      }
-    }
-  } catch (e) {
-    detailChartWrap.innerHTML = `<div style="color:var(--text-dim);">Не удалось загрузить данные</div>`;
-    return;
-  }
-
-  renderDetailChart(currentMetricSeries);
 }
 
 periodTabs.addEventListener("click", (e) => {
