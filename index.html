@@ -297,6 +297,11 @@
     <button id="calendar-toggle">⌄</button>
   </div>
   <div id="calendar-month">
+    <div id="calendar-month-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+      <button id="cal-prev-month" style="background:none;border:none;color:inherit;font-size:20px;padding:4px 12px;">&#8249;</button>
+      <div id="cal-month-label" style="font-weight:600;font-size:16px;"></div>
+      <button id="cal-next-month" style="background:none;border:none;color:inherit;font-size:20px;padding:4px 12px;">&#8250;</button>
+    </div>
     <div class="month-grid-labels">
       <div>Пн</div><div>Вт</div><div>Ср</div><div>Чт</div><div>Пт</div><div>Сб</div><div>Вс</div>
     </div>
@@ -1122,6 +1127,9 @@ function renderMonthGrid() {
   const year = calendarMonthShown.getFullYear();
   const month = calendarMonthShown.getMonth(); // 0-based
   const todayIso = toISODate(new Date());
+  const monthNames = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
+  const labelEl = document.getElementById("cal-month-label");
+  if (labelEl) labelEl.textContent = `${monthNames[month]} ${year}`;
 
   const firstOfMonth = new Date(year, month, 1);
   const startOffset = (firstOfMonth.getDay() + 6) % 7; // Пн=0
@@ -1149,6 +1157,17 @@ async function initCalendar() {
   renderWeekRow();
   renderMonthGrid();
 }
+
+document.getElementById("cal-prev-month").addEventListener("click", async () => {
+  calendarMonthShown = new Date(calendarMonthShown.getFullYear(), calendarMonthShown.getMonth() - 1, 1);
+  await loadActiveDays(calendarMonthShown.getFullYear(), calendarMonthShown.getMonth() + 1);
+  renderMonthGrid();
+});
+document.getElementById("cal-next-month").addEventListener("click", async () => {
+  calendarMonthShown = new Date(calendarMonthShown.getFullYear(), calendarMonthShown.getMonth() + 1, 1);
+  await loadActiveDays(calendarMonthShown.getFullYear(), calendarMonthShown.getMonth() + 1);
+  renderMonthGrid();
+});
 
 const calendarToggle = document.getElementById("calendar-toggle");
 const calendarMonthEl = document.getElementById("calendar-month");
