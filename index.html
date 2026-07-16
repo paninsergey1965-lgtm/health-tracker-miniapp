@@ -226,6 +226,18 @@
     overflow: hidden; max-height: 0; transition: max-height 0.25s ease;
     padding: 0 16px;
   }
+  #summary-strip-more {
+    display: flex; flex-wrap: wrap; gap: 10px;
+    overflow: hidden; max-height: 0; transition: max-height 0.25s ease;
+    padding: 0 20px;
+  }
+  #summary-strip-more.open { max-height: 400px; padding: 4px 20px 14px; }
+  #chips-toggle {
+    background: none; border: none; color: var(--text-dim);
+    font-size: 16px; padding: 6px; cursor: pointer;
+    transition: transform 0.2s;
+  }
+  #chips-toggle.open { transform: rotate(180deg); }
   #calendar-month.open { max-height: 320px; padding: 4px 16px 14px; }
   .month-grid-labels, .month-grid {
     display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px;
@@ -292,6 +304,10 @@
   </div>
 
   <div id="summary-strip"></div>
+  <div id="summary-strip-more"></div>
+  <div style="display:flex;justify-content:center;">
+    <button id="chips-toggle">&#8964;</button>
+  </div>
 
   <div id="reminder-ticker">
     <div id="reminder-ticker-track"></div>
@@ -541,16 +557,18 @@ async function refreshDashboard() {
     },
   ];
 
-  summaryStrip.innerHTML = chips.map(c => `
+  const renderChip = (c) => `
     <div class="summary-chip" ${c.field ? `data-field="${c.field}" data-label="${c.label}"` : ""}>
       <div class="summary-circle ${c.has ? 'has-value' : ''} ${c.notable ? 'notable' : ''}">${c.value}</div>
       <div class="summary-label">${c.label}</div>
     </div>
-  `).join("");
+  `;
+  summaryStrip.innerHTML = chips.slice(0, 5).map(renderChip).join("");
+  document.getElementById("summary-strip-more").innerHTML = chips.slice(5).map(renderChip).join("");
 }
 
 // --- Клик по кружку -> деталка метрики ---
-summaryStrip.addEventListener("click", (e) => {
+function handleChipClick(e) {
   const chip = e.target.closest(".summary-chip[data-field]");
   if (!chip) return;
   if (chip.dataset.field === "__pharmacy__") {
@@ -558,6 +576,15 @@ summaryStrip.addEventListener("click", (e) => {
     return;
   }
   openMetricDetail(chip.dataset.field, chip.dataset.label);
+}
+summaryStrip.addEventListener("click", handleChipClick);
+document.getElementById("summary-strip-more").addEventListener("click", handleChipClick);
+
+const chipsToggle = document.getElementById("chips-toggle");
+const summaryStripMoreEl = document.getElementById("summary-strip-more");
+chipsToggle.addEventListener("click", () => {
+  summaryStripMoreEl.classList.toggle("open");
+  chipsToggle.classList.toggle("open");
 });
 
 const metricDetail = document.getElementById("metric-detail");
