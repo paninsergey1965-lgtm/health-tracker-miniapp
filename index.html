@@ -371,6 +371,11 @@
       <div id="pharmacy-selected-name" style="font-size:18px;font-weight:700;margin-bottom:10px;"></div>
       <input type="number" id="pharmacy-dose-value" placeholder="Доза" style="width:100%;box-sizing:border-box;padding:10px 14px;border-radius:12px;border:1px solid var(--border,#333);background:var(--bg-elevated,#1c1c1e);color:inherit;font-size:16px;margin-bottom:10px;">
       <input type="text" id="pharmacy-dose-unit" placeholder="Ед. изм. (мг, таб, мл...)" style="width:100%;box-sizing:border-box;padding:10px 14px;border-radius:12px;border:1px solid var(--border,#333);background:var(--bg-elevated,#1c1c1e);color:inherit;font-size:16px;margin-bottom:10px;">
+      <div id="pharmacy-existing-schedule" style="display:none;margin-bottom:10px;padding:10px;border-radius:12px;background:var(--bg-elevated,#1c1c1e);"></div>
+      <div style="font-size:14px;color:var(--text-dim,#999);margin-bottom:6px;">Время приёма (необязательно)</div>
+      <input type="time" id="pharmacy-time-1" style="width:100%;box-sizing:border-box;padding:10px 14px;border-radius:12px;border:1px solid var(--border,#333);background:var(--bg-elevated,#1c1c1e);color:inherit;font-size:16px;margin-bottom:8px;">
+      <input type="time" id="pharmacy-time-2" style="width:100%;box-sizing:border-box;padding:10px 14px;border-radius:12px;border:1px solid var(--border,#333);background:var(--bg-elevated,#1c1c1e);color:inherit;font-size:16px;margin-bottom:8px;">
+      <input type="number" id="pharmacy-interval-days" placeholder="Раз в N дней (по умолчанию 1)" style="width:100%;box-sizing:border-box;padding:10px 14px;border-radius:12px;border:1px solid var(--border,#333);background:var(--bg-elevated,#1c1c1e);color:inherit;font-size:16px;margin-bottom:10px;">
       <button id="pharmacy-save-btn" style="width:100%;padding:12px;border-radius:12px;border:none;background:var(--accent,#0a84ff);color:#fff;font-size:16px;font-weight:600;">Записать приём</button>
     </div>
   </div>
@@ -401,6 +406,10 @@ function openPharmacyScreen() {
 
 function closePharmacyScreen() {
   document.getElementById("pharmacy-screen").classList.remove("open");
+  document.getElementById("pharmacy-time-1").value = "";
+  document.getElementById("pharmacy-time-2").value = "";
+  document.getElementById("pharmacy-interval-days").value = "";
+  document.getElementById("pharmacy-existing-schedule").style.display = "none";
 }
 
 async function pharmacySearch(q) {
@@ -427,6 +436,7 @@ async function pharmacySearch(q) {
         document.getElementById("pharmacy-dose-form").style.display = "block";
         document.getElementById("pharmacy-dose-value").value = "";
         document.getElementById("pharmacy-dose-unit").value = "";
+        checkExistingSchedule(item.name);
       });
     });
   } catch (e) {
@@ -457,12 +467,51 @@ document.getElementById("pharmacy-save-btn").addEventListener("click", async () 
         med_type: pharmacySelected.category || "other",
       }),
     });
+    const t1 = document.getElementById("pharmacy-time-1").value;
+    const t2 = document.getElementById("pharmacy-time-2").value;
+    const times = [t1, t2].filter(Boolean);
+    const intervalDays = Number(document.getElementById("pharmacy-interval-days").value) || 1;
+    if (times.length) {
+      try {
+        await apiFetch("/therapy/schedules", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: pharmacySelected.name,
+            type: pharmacySelected.category || "medication",
+            interval_days: intervalDays,
+            times: times,
+          }),
+        });
+      } catch (e) {}
+    }
     closePharmacyScreen();
     if (typeof loadSummary === "function") loadSummary();
   } catch (e) {
     alert("Не удалось сохранить приём");
   }
 });
+
+async function checkExistingSchedule(medName) {
+  const box = document.getElementById("pharmacy-existing-schedule");
+  box.style.display = "none";
+  box.innerHTML = "";
+  try {
+    const list = await apiFetch("/therapy/schedules", { method: "GET" });
+    const matches = list.filter(s => s.name.toLowerCase() === medName.toLowerCase());
+    if (!matches.length) return;
+    const timesStr = matches.map(m => m.time).filter(Boolean).join(", ");
+    box.innerHTML = `<div style="margin-bottom:8px;">Уже есть расписание: ${timesStr || "без времени"}</div>
+      <button id="schedule-delete-btn" style="padding:8px 14px;border-radius:10px;border:none;background:#ff3b30;color:#fff;font-size:14px;margin-right:8px;">Удалить</button>`;
+    box.style.display = "block";
+    document.getElementById("schedule-delete-btn").addEventListener("click", async () => {
+      for (const m of matches) {
+        await apiFetch(`/therapy/schedules/${m.id}`, { method: "DELETE" });
+      }
+      checkExistingSchedule(medName);
+    });
+  } catch (e) {}
+}
 
 async function apiFetch(path, options = {}) {
   const headers = options.headers || {};
