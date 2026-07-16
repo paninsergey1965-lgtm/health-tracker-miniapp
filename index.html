@@ -151,6 +151,13 @@
     padding-top: env(safe-area-inset-top);
   }
   #metric-detail.open { display: flex; }
+#pharmacy-screen { position: fixed; inset: 0; background: var(--bg,#000); z-index: 100; display: none; flex-direction: column; }
+#pharmacy-screen.open { display: flex; }
+#pharmacy-screen .detail-header { display: flex; align-items: center; gap: 10px; padding: 14px 16px; }
+#pharmacy-screen .detail-body { flex: 1; overflow-y: auto; padding: 4px 16px 24px; }
+.pharmacy-item { padding: 12px 14px; border-radius: 12px; background: var(--bg-elevated,#1c1c1e); margin-bottom: 8px; }
+.pharmacy-item-name { font-size: 16px; font-weight: 600; }
+.pharmacy-item-meta { font-size: 13px; color: var(--text-dim); margin-top: 2px; }
   #metric-detail .detail-header {
     display: flex; align-items: center; gap: 12px;
     padding: 14px 16px 8px;
@@ -336,6 +343,23 @@
   </div>
 </div>
 
+<div id="pharmacy-screen">
+  <div class="detail-header">
+    <button class="detail-back" id="pharmacy-back">←</button>
+    <div class="detail-title">Аптека</div>
+  </div>
+  <div class="detail-body">
+    <input type="text" id="pharmacy-search" placeholder="Поиск препарата..." autocomplete="off" style="width:100%;box-sizing:border-box;padding:10px 14px;border-radius:12px;border:1px solid var(--border,#333);background:var(--bg-elevated,#1c1c1e);color:inherit;font-size:16px;margin-bottom:14px;">
+    <div id="pharmacy-results"></div>
+    <div id="pharmacy-dose-form" style="display:none;margin-top:16px;">
+      <div id="pharmacy-selected-name" style="font-size:18px;font-weight:700;margin-bottom:10px;"></div>
+      <input type="number" id="pharmacy-dose-value" placeholder="Доза" style="width:100%;box-sizing:border-box;padding:10px 14px;border-radius:12px;border:1px solid var(--border,#333);background:var(--bg-elevated,#1c1c1e);color:inherit;font-size:16px;margin-bottom:10px;">
+      <input type="text" id="pharmacy-dose-unit" placeholder="Ед. изм. (мг, таб, мл...)" style="width:100%;box-sizing:border-box;padding:10px 14px;border-radius:12px;border:1px solid var(--border,#333);background:var(--bg-elevated,#1c1c1e);color:inherit;font-size:16px;margin-bottom:10px;">
+      <button id="pharmacy-save-btn" style="width:100%;padding:12px;border-radius:12px;border:none;background:var(--accent,#0a84ff);color:#fff;font-size:16px;font-weight:600;">Записать приём</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const tg = window.Telegram?.WebApp;
 tg?.ready();
@@ -346,6 +370,83 @@ const API_BASE = "https://worker-production-931b.up.railway.app/api";
 function initDataHeader() {
   return tg?.initData || "";
 }
+
+let pharmacySelected = null;
+let pharmacySearchTimer = null;
+
+function openPharmacyScreen() {
+  document.getElementById("pharmacy-screen").classList.add("open");
+  document.getElementById("pharmacy-search").value = "";
+  document.getElementById("pharmacy-results").innerHTML = "";
+  document.getElementById("pharmacy-dose-form").style.display = "none";
+  pharmacySelected = null;
+  document.getElementById("pharmacy-search").focus();
+}
+
+function closePharmacyScreen() {
+  document.getElementById("pharmacy-screen").classList.remove("open");
+}
+
+async function pharmacySearch(q) {
+  const resultsEl = document.getElementById("pharmacy-results");
+  if (!q || q.length < 2) { resultsEl.innerHTML = ""; return; }
+  try {
+    const data = await apiFetch(`/pharmacy/search?q=${encodeURIComponent(q)}`, { method: "GET" });
+    const items = data.results || data || [];
+    if (!items.length) {
+      resultsEl.innerHTML = `<div style="color:var(--text-dim);padding:20px 0;">Ничего не найдено</div>`;
+      return;
+    }
+    resultsEl.innerHTML = items.map((it, i) => `
+      <div class="pharmacy-item" data-idx="${i}">
+        <div class="pharmacy-item-name">${it.name}</div>
+        <div class="pharmacy-item-meta">${it.category || ""} ${it.form ? "· " + it.form : ""} ${it.common_dosages ? "· " + it.common_dosages : ""}</div>
+      </div>
+    `).join("");
+    resultsEl.querySelectorAll(".pharmacy-item").forEach(el => {
+      el.addEventListener("click", () => {
+        const item = items[Number(el.dataset.idx)];
+        pharmacySelected = item;
+        document.getElementById("pharmacy-selected-name").textContent = item.name;
+        document.getElementById("pharmacy-dose-form").style.display = "block";
+        document.getElementById("pharmacy-dose-value").value = "";
+        document.getElementById("pharmacy-dose-unit").value = "";
+      });
+    });
+  } catch (e) {
+    resultsEl.innerHTML = `<div style="color:var(--text-dim);padding:20px 0;">Ошибка поиска</div>`;
+  }
+}
+
+document.getElementById("pharmacy-back").addEventListener("click", closePharmacyScreen);
+
+document.getElementById("pharmacy-search").addEventListener("input", (e) => {
+  clearTimeout(pharmacySearchTimer);
+  const q = e.target.value;
+  pharmacySearchTimer = setTimeout(() => pharmacySearch(q), 300);
+});
+
+document.getElementById("pharmacy-save-btn").addEventListener("click", async () => {
+  if (!pharmacySelected) return;
+  const doseValue = document.getElementById("pharmacy-dose-value").value;
+  const doseUnit = document.getElementById("pharmacy-dose-unit").value;
+  try {
+    await apiFetch("/medications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        med_name: pharmacySelected.name,
+        dose_value: doseValue ? Number(doseValue) : null,
+        dose_unit: doseUnit || null,
+        med_type: pharmacySelected.category || "other",
+      }),
+    });
+    closePharmacyScreen();
+    if (typeof loadSummary === "function") loadSummary();
+  } catch (e) {
+    alert("Не удалось сохранить приём");
+  }
+});
 
 async function apiFetch(path, options = {}) {
   const headers = options.headers || {};
@@ -432,6 +533,12 @@ async function refreshDashboard() {
       value: today.last_medication ? formatTime(today.last_medication.taken_at) : "—",
       has: !!today.last_medication,
     },
+    {
+      label: "Аптека",
+      field: "__pharmacy__",
+      value: "💊",
+      has: true,
+    },
   ];
 
   summaryStrip.innerHTML = chips.map(c => `
@@ -446,6 +553,10 @@ async function refreshDashboard() {
 summaryStrip.addEventListener("click", (e) => {
   const chip = e.target.closest(".summary-chip[data-field]");
   if (!chip) return;
+  if (chip.dataset.field === "__pharmacy__") {
+    openPharmacyScreen();
+    return;
+  }
   openMetricDetail(chip.dataset.field, chip.dataset.label);
 });
 
