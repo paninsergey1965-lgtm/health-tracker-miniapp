@@ -549,6 +549,20 @@ function formatTime(iso) {
   return d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
 }
 
+function formatAxisDate(iso, showYear) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const opts = showYear
+    ? { day: "numeric", month: "short", year: "2-digit" }
+    : { day: "numeric", month: "short" };
+  return d.toLocaleDateString("ru-RU", opts);
+}
+function spansMultipleYears(points) {
+  if (!points || !points.length) return false;
+  const years = points.map(p => new Date(p[0]).getFullYear());
+  return Math.max(...years) !== Math.min(...years);
+}
+
 let lastDashboardData = null;
 
 async function refreshDashboard() {
@@ -804,6 +818,7 @@ function renderDetailChart(series) {
   });
   const pathD = buildMonotonePath(coords);
 
+  const detailShowYear = spansMultipleYears(points);
   const dots = coords.map((c, i) => {
     const v = parseFloat(points[i][1]);
     const out = isOut(v, band);
@@ -812,7 +827,7 @@ function renderDetailChart(series) {
     return `
       <circle cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" r="${r}" fill="${color}"/>
       <text x="${c[0].toFixed(1)}" y="${(c[1]-10).toFixed(1)}" text-anchor="middle" font-size="12" font-weight="700" fill="${color}">${points[i][1]}</text>
-      <text x="${c[0].toFixed(1)}" y="${H-6}" text-anchor="middle" font-size="10" fill="#8e8e93">${formatTime(points[i][0])}</text>
+      <text x="${c[0].toFixed(1)}" y="${H-6}" text-anchor="middle" font-size="10" fill="#8e8e93">${formatAxisDate(points[i][0], detailShowYear)}</text>
     `;
   }).join("");
 
@@ -912,9 +927,10 @@ function renderBpChart(series) {
   const sysDots = makeDots(sysCoords, sysPoints, sysBand, "#34C759");
   const diaDots = makeDots(diaCoords, diaPoints, diaBand, "#4FB8A6");
   const allDates = maxLen === sysPoints.length ? sysPoints : diaPoints;
+  const bpShowYear = spansMultipleYears(allDates);
   const dateLabels = (maxLen > 0 ? allDates : []).map((p, i) => {
     const x = maxLen === 1 ? W / 2 : padLeft + i * stepX;
-    return `<text x="${x.toFixed(1)}" y="${H-6}" text-anchor="middle" font-size="10" fill="#8e8e93">${formatTime(p[0])}</text>`;
+    return `<text x="${x.toFixed(1)}" y="${H-6}" text-anchor="middle" font-size="10" fill="#8e8e93">${formatAxisDate(p[0], bpShowYear)}</text>`;
   }).join("");
 
   const legend = `
