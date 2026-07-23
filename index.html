@@ -1157,6 +1157,9 @@ async function openMetricDetail(field, label, fromLabsList = false) {
         const text = i.days_left <= 0 ? `Пора: ${i.compound}` : `${i.compound}: через ${i.days_left} дн.`;
         html += `<div class="reminder-row"><span>💉 ${text}</span></div>`;
       });
+      journalToday.forEach(j => {
+        html += `<div class="reminder-row"><span>Дневник: ${j.text}</span></div>`;
+      });
       detailHistoryList.innerHTML = html;
 
       detailHistoryList.querySelectorAll(".reminder-dismiss").forEach(btn => {
@@ -1458,6 +1461,7 @@ async function refreshReminders() {
     if (i.days_left <= 0) parts.push(`Пора укол: ${i.compound}`);
     else parts.push(`До укола ${i.compound}: ${i.days_left} дн.`);
   });
+  (lastReminders.journal_today || []).forEach(j => parts.push(`Дневник: ${j.text}`));
 
   reminderTicker.classList.add("show");
 
