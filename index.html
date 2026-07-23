@@ -367,6 +367,10 @@
       <button data-period="all" class="active">Всё время</button>
     </div>
     <div class="detail-chart-wrap" id="detail-chart-wrap"></div>
+    <div id="day-journal-input" style="display:none;margin-bottom:16px;">
+      <textarea id="day-journal-text" placeholder="Что произошло / что сделать?" style="width:100%;box-sizing:border-box;padding:10px 14px;border-radius:12px;border:1px solid var(--border,#333);background:var(--bg-elevated,#1c1c1e);color:inherit;font-size:16px;margin-bottom:8px;min-height:70px;resize:vertical;"></textarea>
+      <button id="day-journal-send" style="width:100%;padding:12px;border-radius:12px;border:none;background:var(--accent,#0a84ff);color:#fff;font-size:16px;font-weight:600;">Записать</button>
+    </div>
     <div class="detail-history">
       <h3>История</h3>
       <div id="detail-history-list"></div>
@@ -1109,6 +1113,20 @@ async function openMetricDetail(field, label, fromLabsList = false) {
       detailHistoryList.innerHTML = `<div style="color:var(--text-dim);">Не удалось загрузить данные</div>`;
     }
     return;
+  }
+
+  document.getElementById("day-journal-input").style.display = isDay ? "block" : "none";
+  if (isDay) {
+    const iso = field.split(":")[1];
+    const journalListEl = document.getElementById("day-journal-input");
+    document.getElementById("day-journal-send").onclick = async () => {
+      const ta = document.getElementById("day-journal-text");
+      const text = ta.value.trim();
+      if (!text) return;
+      await apiFetch("/journal/text", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, date: iso }) });
+      ta.value = "";
+      openMetricDetail(field, detailTitle.textContent);
+    };
   }
 
   if (isReminders) {
