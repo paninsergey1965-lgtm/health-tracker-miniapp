@@ -1133,14 +1133,15 @@ async function openMetricDetail(field, label, fromLabsList = false) {
   if (isReminders) {
     detailValue.textContent = "";
     try {
-      const data = lastReminders && (lastReminders.missing_today?.length || lastReminders.injections?.length)
+      const data = lastReminders && (lastReminders.missing_today?.length || lastReminders.injections?.length || lastReminders.journal_today?.length)
         ? lastReminders
         : await apiFetch(`/reminders`, { method: "GET" });
 
       const missing = data.missing_today || [];
       const injections = data.injections || [];
+      const journalToday = data.journal_today || [];
 
-      if (!missing.length && !injections.length) {
+      if (!missing.length && !injections.length && !journalToday.length) {
         detailHistoryList.innerHTML = `<div style="color:var(--text-dim);padding:20px 0;">Активных напоминаний нет</div>`;
         return;
       }
