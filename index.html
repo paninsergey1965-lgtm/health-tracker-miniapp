@@ -1098,6 +1098,7 @@ async function openMetricDetail(field, label, fromLabsList = false) {
       });
       (data.medications || []).forEach(m => rows.push({ label: m.name, val: m.dose || "", time: m.time }));
       (data.labs || []).forEach(l => rows.push({ label: l.test_name, val: `${l.value}${l.unit ? " " + l.unit : ""}`, time: null }));
+      (data.journal || []).forEach(j => rows.push({ label: "Дневник", val: j.text_content || "", time: j.created_at }));
 
       if (!rows.length) {
         detailHistoryList.innerHTML = `<div style="color:var(--text-dim);padding:20px 0;">В этот день записей нет</div>`;
