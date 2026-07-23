@@ -1086,6 +1086,15 @@ async function openMetricDetail(field, label, fromLabsList = false) {
   if (isDay) {
     const iso = field.split(":")[1];
     detailValue.textContent = "";
+    document.getElementById("day-journal-input").style.display = "block";
+    document.getElementById("day-journal-send").onclick = async () => {
+      const ta = document.getElementById("day-journal-text");
+      const text = ta.value.trim();
+      if (!text) return;
+      await apiFetch("/journal/text", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, date: iso }) });
+      ta.value = "";
+      openMetricDetail(field, detailTitle.textContent);
+    };
     try {
       const data = await apiFetch(`/day/${iso}`, { method: "GET" });
       const rows = [];
@@ -1117,18 +1126,6 @@ async function openMetricDetail(field, label, fromLabsList = false) {
   }
 
   document.getElementById("day-journal-input").style.display = isDay ? "block" : "none";
-  if (isDay) {
-    const iso = field.split(":")[1];
-    const journalListEl = document.getElementById("day-journal-input");
-    document.getElementById("day-journal-send").onclick = async () => {
-      const ta = document.getElementById("day-journal-text");
-      const text = ta.value.trim();
-      if (!text) return;
-      await apiFetch("/journal/text", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, date: iso }) });
-      ta.value = "";
-      openMetricDetail(field, detailTitle.textContent);
-    };
-  }
 
   if (isReminders) {
     detailValue.textContent = "";
