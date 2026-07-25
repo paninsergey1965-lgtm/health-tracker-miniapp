@@ -476,7 +476,7 @@ async function loadJournalEntries() {
     }
     listEl.innerHTML = entries.map(e => `
       <div style="padding:10px 0;border-bottom:1px solid var(--border,#333);">
-        <div style="font-size:13px;color:var(--text-dim,#999);">${new Date(e.created_at).toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"})}</div>
+        <div style="font-size:13px;color:var(--text-dim,#999);">${e.event_time ? "⏰ " + e.event_time.slice(0,5) : new Date(e.created_at).toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"})}</div>
         <div>${e.text_content || ""}</div>
       </div>
     `).join("");
@@ -1173,7 +1173,7 @@ async function openMetricDetail(field, label, fromLabsList = false) {
       });
       (data.medications || []).forEach(m => rows.push({ label: m.name, val: m.dose || "", time: m.time }));
       (data.labs || []).forEach(l => rows.push({ label: l.test_name, val: `${l.value}${l.unit ? " " + l.unit : ""}`, time: null }));
-      (data.journal || []).forEach(j => rows.push({ label: "Дневник", val: j.text_content || "", time: j.created_at }));
+      (data.journal || []).forEach(j => rows.push({ label: "Дневник", val: j.text_content || "", time: j.event_time ? j.event_time.slice(0,5) : j.created_at, isEventTime: !!j.event_time }));
 
       if (!rows.length) {
         detailHistoryList.innerHTML = `<div style="color:var(--text-dim);padding:20px 0;">В этот день записей нет</div>`;
