@@ -491,6 +491,9 @@ document.getElementById("journal-send-btn").addEventListener("click", async () =
   const timeInput = document.getElementById("journal-time-input");
   const text = input.value.trim();
   if (!text) return;
+  const btn = document.getElementById("journal-send-btn");
+  if (btn.disabled) return;
+  btn.disabled = true;
   try {
     await apiFetch("/journal/text", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, time: timeInput.value || null }) });
     input.value = "";
@@ -498,6 +501,8 @@ document.getElementById("journal-send-btn").addEventListener("click", async () =
     await loadJournalEntries();
   } catch (err) {
     alert("Не удалось сохранить запись");
+  } finally {
+    btn.disabled = false;
   }
 });
 
@@ -1142,10 +1147,17 @@ async function openMetricDetail(field, label, fromLabsList = false) {
       const timeInput = document.getElementById("day-journal-time");
       const text = ta.value.trim();
       if (!text) return;
-      await apiFetch("/journal/text", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, date: iso, time: timeInput.value || null }) });
-      ta.value = "";
-      timeInput.value = "";
-      openMetricDetail(field, detailTitle.textContent);
+      const dayBtn = document.getElementById("day-journal-send");
+      if (dayBtn.disabled) return;
+      dayBtn.disabled = true;
+      try {
+        await apiFetch("/journal/text", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, date: iso, time: timeInput.value || null }) });
+        ta.value = "";
+        timeInput.value = "";
+        openMetricDetail(field, detailTitle.textContent);
+      } finally {
+        dayBtn.disabled = false;
+      }
     };
     (() => {
       const micBtnDay = document.getElementById("day-journal-mic");
