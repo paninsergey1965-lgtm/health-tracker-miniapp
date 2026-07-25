@@ -1181,7 +1181,7 @@ async function openMetricDetail(field, label, fromLabsList = false) {
       }
       detailHistoryList.innerHTML = rows.map(r => `
         <div class="history-row">
-          <span class="h-date">${r.time ? formatTime(r.time) + " — " : ""}${r.label}</span>
+          <span class="h-date">${r.isEventTime ? "⏰ " + r.time + " — " : (r.time ? formatTime(r.time) + " — " : "")}${r.label}</span>
           <span class="h-val">${r.val}</span>
         </div>
       `).join("");
