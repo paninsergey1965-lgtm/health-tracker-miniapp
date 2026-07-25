@@ -1478,7 +1478,7 @@ reminderTicker.addEventListener("click", () => {
   openMetricDetail("__reminders__", "Напоминания");
 });
 
-refreshDashboard().then(refreshReminders);
+refreshReminders();
 
 function showToast(text, ms = 2500) {
   toast.textContent = text;
