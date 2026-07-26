@@ -1283,8 +1283,29 @@ async function openMetricDetail(field, label, fromLabsList = false) {
       journalToday.forEach(j => {
         html += `<div class="reminder-row"><span>Дневник: ${j.text}</span></div>`;
       });
+      (data.dismissed_names || []).forEach(name => {
+        html += `<div class="reminder-row"><span style="color:var(--text-dim);">Отключено: ${name}</span><button class="reminder-undismiss" data-undismiss="${name.replace(/"/g, '&quot;')}">Включить</button></div>`;
+      });
       detailHistoryList.innerHTML = html;
 
+      detailHistoryList.querySelectorAll(".reminder-undismiss").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          btn.disabled = true;
+          btn.textContent = "...";
+          try {
+            await apiFetch(`/reminders/undismiss`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ med_name: btn.dataset.undismiss }),
+            });
+            await refreshReminders();
+            openMetricDetail("__reminders__", "Напоминания");
+          } catch (e) {
+            btn.disabled = false;
+            btn.textContent = "Включить";
+          }
+        });
+      });
       detailHistoryList.querySelectorAll(".reminder-dismiss").forEach(btn => {
         btn.addEventListener("click", async () => {
           btn.disabled = true;
