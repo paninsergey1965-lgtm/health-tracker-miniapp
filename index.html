@@ -1168,6 +1168,9 @@ async function openMetricDetail(field, label, fromLabsList = false) {
     document.getElementById("day-journal-file").onchange = async (e) => {
       const file = e.target.files[0];
       if (!file) return;
+      const photoBtn = document.getElementById("day-journal-photo");
+      if (photoBtn.disabled) return;
+      photoBtn.disabled = true;
       const ta = document.getElementById("day-journal-text");
       const timeInput = document.getElementById("day-journal-time");
       const form = new FormData();
@@ -1175,11 +1178,15 @@ async function openMetricDetail(field, label, fromLabsList = false) {
       form.append("date", iso);
       if (timeInput.value) form.append("time", timeInput.value);
       if (ta.value.trim()) form.append("text", ta.value.trim());
-      await apiFetch("/journal/photo", { method: "POST", body: form });
-      ta.value = "";
-      timeInput.value = "";
-      e.target.value = "";
-      openMetricDetail(field, detailTitle.textContent);
+      try {
+        await apiFetch("/journal/photo", { method: "POST", body: form });
+        ta.value = "";
+        timeInput.value = "";
+        e.target.value = "";
+        openMetricDetail(field, detailTitle.textContent);
+      } finally {
+        photoBtn.disabled = false;
+      }
     };
     document.getElementById("day-journal-send").onclick = async () => {
       const ta = document.getElementById("day-journal-text");
