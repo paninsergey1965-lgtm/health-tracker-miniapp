@@ -372,6 +372,8 @@
       <div style="display:flex;gap:8px;margin-bottom:8px;">
         <input type="time" id="day-journal-time" style="flex:1;box-sizing:border-box;padding:10px 14px;border-radius:12px;border:1px solid var(--border,#333);background:var(--bg-elevated,#1c1c1e);color:inherit;font-size:16px;">
         <button id="day-journal-mic" style="width:48px;flex-shrink:0;border-radius:12px;border:1px solid var(--border,#333);background:var(--bg-elevated,#1c1c1e);color:inherit;font-size:18px;">🎤</button>
+        <button id="day-journal-photo" style="width:48px;flex-shrink:0;border-radius:12px;border:1px solid var(--border,#333);background:var(--bg-elevated,#1c1c1e);color:inherit;font-size:18px;">📷</button>
+        <input type="file" id="day-journal-file" accept="image/*" capture="environment" style="display:none">
       </div>
       <button id="day-journal-send" style="width:100%;padding:12px;border-radius:12px;border:none;background:var(--accent,#0a84ff);color:#fff;font-size:16px;font-weight:600;">Записать</button>
     </div>
@@ -647,6 +649,24 @@ async function checkExistingSchedule(medName) {
     });
   } catch (e) {}
 }
+
+async function loadJournalPhotos(container) {
+  const imgs = container.querySelectorAll("img.journal-photo[data-file-id]");
+  for (const img of imgs) {
+    const fileId = img.getAttribute("data-file-id");
+    if (!fileId) continue;
+    try {
+      const res = await fetch(API_BASE + "/photo/" + fileId, {
+        headers: { "X-Telegram-Init-Data": initDataHeader() }
+      });
+      const blob = await res.blob();
+      img.src = URL.createObjectURL(blob);
+    } catch (e) {
+      img.alt = "Не удалось загрузить фото";
+    }
+  }
+}
+
 
 async function apiFetch(path, options = {}) {
   const headers = options.headers || {};
@@ -1142,6 +1162,25 @@ async function openMetricDetail(field, label, fromLabsList = false) {
     const iso = field.split(":")[1];
     detailValue.textContent = "";
     document.getElementById("day-journal-input").style.display = "block";
+    document.getElementById("day-journal-photo").onclick = () => {
+      document.getElementById("day-journal-file").click();
+    };
+    document.getElementById("day-journal-file").onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const ta = document.getElementById("day-journal-text");
+      const timeInput = document.getElementById("day-journal-time");
+      const form = new FormData();
+      form.append("file", file);
+      form.append("date", iso);
+      if (timeInput.value) form.append("time", timeInput.value);
+      if (ta.value.trim()) form.append("text", ta.value.trim());
+      await apiFetch("/journal/photo", { method: "POST", body: form });
+      ta.value = "";
+      timeInput.value = "";
+      e.target.value = "";
+      openMetricDetail(field, detailTitle.textContent);
+    };
     document.getElementById("day-journal-send").onclick = async () => {
       const ta = document.getElementById("day-journal-text");
       const timeInput = document.getElementById("day-journal-time");
@@ -1185,7 +1224,7 @@ async function openMetricDetail(field, label, fromLabsList = false) {
       });
       (data.medications || []).forEach(m => rows.push({ label: m.name, val: m.dose || "", time: m.time }));
       (data.labs || []).forEach(l => rows.push({ label: l.test_name, val: `${l.value}${l.unit ? " " + l.unit : ""}`, time: null }));
-      (data.journal || []).forEach(j => rows.push({ label: "Дневник", val: j.text_content || "", time: j.event_time ? j.event_time.slice(0,5) : j.created_at, isEventTime: !!j.event_time }));
+      (data.journal || []).forEach(j => rows.push({ label: "Дневник", val: j.text_content || "", time: j.event_time ? j.event_time.slice(0,5) : j.created_at, isEventTime: !!j.event_time, contentType: j.content_type, mediaFileId: j.media_file_id }));
 
       if (!rows.length) {
         detailHistoryList.innerHTML = `<div style="color:var(--text-dim);padding:20px 0;">В этот день записей нет</div>`;
@@ -1194,9 +1233,10 @@ async function openMetricDetail(field, label, fromLabsList = false) {
       detailHistoryList.innerHTML = rows.map(r => `
         <div class="history-row">
           <span class="h-date">${r.isEventTime ? "⏰ " + r.time + " — " : (r.time ? formatTime(r.time) + " — " : "")}${r.label}</span>
-          <span class="h-val">${r.val}</span>
+          ${r.contentType === "photo" ? `<img class="journal-photo" data-file-id="${r.mediaFileId}" style="max-width:140px;border-radius:8px;display:block;margin-top:4px;" alt="${r.val || 'photo'}">` : `<span class="h-val">${r.val}</span>`}
         </div>
       `).join("");
+      loadJournalPhotos(detailHistoryList);
     } catch (e) {
       detailHistoryList.innerHTML = `<div style="color:var(--text-dim);">Не удалось загрузить данные</div>`;
     }
