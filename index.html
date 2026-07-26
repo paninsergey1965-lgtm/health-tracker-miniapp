@@ -501,6 +501,7 @@ document.getElementById("journal-send-btn").addEventListener("click", async () =
     input.value = "";
     timeInput.value = "";
     await loadJournalEntries();
+    refreshReminders();
   } catch (err) {
     alert("Не удалось сохранить запись");
   } finally {
@@ -522,7 +523,7 @@ async function recordJournalVoice(dateStr, timeInput, onDone) {
       form.append("file", blob, "voice.webm");
       if (dateStr) form.append("date", dateStr);
       if (timeInput && timeInput.value) form.append("time", timeInput.value);
-      try { await apiFetch("/journal/voice", { method: "POST", body: form }); } catch (err) {}
+      try { await apiFetch("/journal/voice", { method: "POST", body: form }); refreshReminders(); } catch (err) {}
       toast.classList.remove("show");
       if (onDone) onDone();
     };
@@ -1183,6 +1184,7 @@ async function openMetricDetail(field, label, fromLabsList = false) {
         ta.value = "";
         timeInput.value = "";
         e.target.value = "";
+        refreshReminders();
         openMetricDetail(field, detailTitle.textContent);
       } finally {
         photoBtn.disabled = false;
@@ -1200,6 +1202,7 @@ async function openMetricDetail(field, label, fromLabsList = false) {
         await apiFetch("/journal/text", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, date: iso, time: timeInput.value || null }) });
         ta.value = "";
         timeInput.value = "";
+        refreshReminders();
         openMetricDetail(field, detailTitle.textContent);
       } finally {
         dayBtn.disabled = false;
@@ -1626,6 +1629,11 @@ reminderTicker.addEventListener("click", () => {
 
 refreshReminders();
 
+setInterval(refreshReminders, 60000);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") refreshReminders();
+});
+
 function showToast(text, ms = 2500) {
   toast.textContent = text;
   toast.classList.add("show");
@@ -1786,6 +1794,7 @@ function addConfirmCard(type, payload) {
     if (res.saved) {
       addTextCard("✅ Сохранено");
       refreshDashboard();
+      refreshReminders();
     } else {
       addTextCard("Не удалось сохранить, попробуй ещё раз");
     }
@@ -1801,6 +1810,7 @@ function handleApiResponse(data) {
     addTextCard(data.payload.text, data.transcript);
     playVoiceReply(data.audio_base64);
     refreshDashboard();
+    refreshReminders();
   } else if (data.type === "chart") {
     addChartCard(data.payload.field, data.payload.series);
     playVoiceReply(data.audio_base64);
