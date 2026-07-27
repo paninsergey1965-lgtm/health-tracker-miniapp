@@ -25,13 +25,13 @@
   }
   #bg-heart {
     position: fixed; inset: 0; display: flex; align-items: flex-start; justify-content: center; padding-top: 6vh;
-    pointer-events: none; opacity: .18;
+    pointer-events: none; opacity: .12;
     animation: heart-breathe 3s ease-in-out infinite;
   }
   #bg-heart img { width: 82vw; max-width: 460px; height: auto; filter: grayscale(1) sepia(1) hue-rotate(140deg) saturate(3) brightness(1.1) drop-shadow(0 0 12px var(--accent)); }
   @keyframes heart-breathe {
-    0%, 100% { transform: scale(1); opacity: .18; }
-    50% { transform: scale(1.02); opacity: .26; }
+    0%, 100% { transform: scale(1); opacity: .12; }
+    50% { transform: scale(1.02); opacity: .18; }
   }
   #app {
     display: flex; flex-direction: column; height: 100vh; height: 100dvh;
