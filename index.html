@@ -28,7 +28,7 @@
     pointer-events: none; opacity: .12;
     animation: heart-breathe 3s ease-in-out infinite;
   }
-  #bg-heart img { width: 82vw; max-width: 460px; height: auto; filter: grayscale(1) sepia(1) hue-rotate(140deg) saturate(3) brightness(1.1) drop-shadow(0 0 12px var(--accent)); }
+  #bg-heart img { width: 82vw; max-width: 460px; height: auto; mix-blend-mode: screen; filter: brightness(1.15) drop-shadow(0 0 10px var(--accent)); }
   @keyframes heart-breathe {
     0%, 100% { transform: scale(1); opacity: .12; }
     50% { transform: scale(1.02); opacity: .18; }
@@ -329,7 +329,7 @@
 </head>
 <body>
 <div id="bg-heart">
-  <img src="assets/heart-bg.svg" alt="">
+  <img src="assets/heart-bg.png" alt="">
 </div>
 <div id="app">
   <header>
