@@ -24,14 +24,14 @@
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
   }
   #bg-heart {
-    position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
-    pointer-events: none; z-index: -1; opacity: .14;
+    position: fixed; inset: 0; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 10vh;
+    pointer-events: none; z-index: -1; opacity: .26;
     animation: heart-breathe 2.4s ease-in-out infinite;
   }
-  #bg-heart svg { width: 78vw; max-width: 420px; height: auto; filter: drop-shadow(0 0 10px var(--accent)); }
+  #bg-heart svg { width: 60vw; max-width: 300px; height: auto; filter: drop-shadow(0 0 10px var(--accent)); }
   @keyframes heart-breathe {
-    0%, 100% { transform: scale(1); opacity: .14; }
-    50% { transform: scale(1.03); opacity: .2; }
+    0%, 100% { transform: scale(1); opacity: .26; }
+    50% { transform: scale(1.03); opacity: .36; }
   }
   #app {
     display: flex; flex-direction: column; height: 100vh; height: 100dvh;
@@ -329,7 +329,7 @@
 </head>
 <body>
 <div id="bg-heart">
-  <svg viewBox="0 0 300 460" fill="none" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round">
+  <svg viewBox="0 0 300 460" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round">
     <path d="M150,150 C110,90 20,110 20,190 C20,270 90,320 150,400 C210,320 280,270 280,190 C280,110 190,90 150,150 Z"/>
     <path d="M150,150 C150,100 130,60 90,40 C60,25 40,10 30,0"/>
     <path d="M150,150 C160,90 190,50 230,35 C260,25 275,10 280,0"/>
