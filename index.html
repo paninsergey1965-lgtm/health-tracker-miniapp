@@ -672,6 +672,7 @@ async function loadJournalPhotos(container) {
 async function apiFetch(path, options = {}) {
   const headers = options.headers || {};
   headers["X-Telegram-Init-Data"] = initDataHeader();
+  headers["X-TZ-Offset"] = String(new Date().getTimezoneOffset());
   const res = await fetch(API_BASE + path, { ...options, headers });
   return res.json();
 }
