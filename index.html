@@ -38,6 +38,25 @@
     font-size: 13px; color: var(--text-dim);
   }
 
+  #ecg-strip {
+    height: 28px; overflow: hidden; margin: 0 20px 8px; opacity: .5;
+  }
+  #ecg-track {
+    display: flex; width: fit-content;
+    animation: ecg-scroll 3.5s linear infinite;
+  }
+  #ecg-track svg { display: block; height: 28px; }
+  @keyframes ecg-scroll {
+    from { transform: translateX(0); }
+    to { transform: translateX(-600px); }
+  }
+  .summary-circle.pulse-breathe {
+    animation-name: pulse-breathe; animation-timing-function: ease-in-out; animation-iteration-count: infinite;
+  }
+  @keyframes pulse-breathe {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.07); }
+  }
   #summary-strip {
     display: flex; gap: 10px; overflow-x: auto; padding: 4px 20px 14px;
     flex-shrink: 0; -webkit-overflow-scrolling: touch;
@@ -318,6 +337,12 @@
     <div class="month-grid" id="month-grid"></div>
   </div>
 
+  <div id="ecg-strip">
+    <div id="ecg-track">
+      <svg viewBox="0 0 600 28" width="600" height="28"><path d="M0,14 40,14 46,10 52,17 58,14 65,14 68,18 71,2 74,24 77,10 80,14 90,14 100,14 108,8 116,14 124,17 132,14 150,14 190,14 196,10 202,17 208,14 215,14 218,18 221,2 224,24 227,10 230,14 240,14 250,14 258,8 266,14 274,17 282,14 300,14 340,14 346,10 352,17 358,14 365,14 368,18 371,2 374,24 377,10 380,14 390,14 400,14 408,8 416,14 424,17 432,14 450,14 490,14 496,10 502,17 508,14 515,14 518,18 521,2 524,24 527,10 530,14 540,14 550,14 558,8 566,14 574,17 582,14 600,14" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>
+      <svg viewBox="0 0 600 28" width="600" height="28"><path d="M0,14 40,14 46,10 52,17 58,14 65,14 68,18 71,2 74,24 77,10 80,14 90,14 100,14 108,8 116,14 124,17 132,14 150,14 190,14 196,10 202,17 208,14 215,14 218,18 221,2 224,24 227,10 230,14 240,14 250,14 258,8 266,14 274,17 282,14 300,14 340,14 346,10 352,17 358,14 365,14 368,18 371,2 374,24 377,10 380,14 390,14 400,14 408,8 416,14 424,17 432,14 450,14 490,14 496,10 502,17 508,14 515,14 518,18 521,2 524,24 527,10 530,14 540,14 550,14 558,8 566,14 574,17 582,14 600,14" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>
+    </div>
+  </div>
   <div id="summary-strip"></div>
   <div id="summary-strip-more"></div>
   <div style="display:flex;justify-content:center;">
@@ -783,12 +808,18 @@ async function refreshDashboard() {
     },
   ];
 
-  const renderChip = (c) => `
+  const renderChip = (c) => {
+    const isPulse = c.field === "pulse" && c.has;
+    const bpm = isPulse ? parseInt(c.value, 10) : null;
+    const pulseClass = isPulse && bpm > 0 ? " pulse-breathe" : "";
+    const pulseStyle = isPulse && bpm > 0 ? ` style="animation-duration:${(60 / bpm).toFixed(2)}s"` : "";
+    return `
     <div class="summary-chip" ${c.field ? `data-field="${c.field}" data-label="${c.label}"` : ""}>
-      <div class="summary-circle ${c.has ? 'has-value' : ''} ${c.notable ? 'notable' : ''}">${c.value}</div>
+      <div class="summary-circle ${c.has ? 'has-value' : ''} ${c.notable ? 'notable' : ''}${pulseClass}"${pulseStyle}>${c.value}</div>
       <div class="summary-label">${c.label}</div>
     </div>
   `;
+  };
   summaryStrip.innerHTML = chips.slice(0, 5).map(renderChip).join("");
   document.getElementById("summary-strip-more").innerHTML = chips.slice(5).map(renderChip).join("");
 }
