@@ -1,5 +1,5 @@
 function mountDialPicker(container, opts = {}) {
-  const TICKS_PER_REV = 144;
+  const TICKS_PER_REV = 288;   // 5-min steps over a full 24h face
   const STEP_MIN = 5;
   const R_OUTER = 130, R_INNER = 108, R_MAJOR_IN = 96, CENTER = 150;
   const NS = 'http://www.w3.org/2000/svg';
@@ -16,13 +16,11 @@ function mountDialPicker(container, opts = {}) {
       <div class="dp-index"></div>
       <div class="dp-readout">
         <div class="dp-time" id="${uid}-time">00:00</div>
-        <div class="dp-meridiem" id="${uid}-meridiem"></div>
       </div>
     </div>`;
   const wrap = container.querySelector(`#${uid}-wrap`);
   const svg = container.querySelector(`#${uid}-svg`);
   const timeEl = container.querySelector(`#${uid}-time`);
-  const meridiemEl = container.querySelector(`#${uid}-meridiem`);
 
   for (let i = 0; i < TICKS_PER_REV; i++) {
     const isMajor = i % 12 === 0;
@@ -35,7 +33,7 @@ function mountDialPicker(container, opts = {}) {
       label.setAttribute('data-label', i);
       label.setAttribute('class', 'dp-label');
       label.setAttribute('text-anchor', 'middle');
-      label.textContent = String(i/12 === 0 ? 12 : i/12);
+      label.textContent = String(i/12);
       svg.appendChild(label);
     }
   }
@@ -66,14 +64,10 @@ function mountDialPicker(container, opts = {}) {
       }
     }
     const totalMinutes = (((valueTicks % TICKS_PER_REV) + TICKS_PER_REV) % TICKS_PER_REV) * STEP_MIN;
-    const isPM = (Math.floor(valueTicks / TICKS_PER_REV) % 2 + 2) % 2 !== 0;
-    let h = Math.floor(totalMinutes/60), m = totalMinutes%60;
-    const h12 = h === 0 ? 12 : h;
-    timeEl.textContent = String(h12).padStart(2,'0') + ':' + String(m).padStart(2,'0');
-    meridiemEl.textContent = isPM ? 'ВЕЧЕР' : 'УТРО';
+    const h = Math.floor(totalMinutes/60), m = totalMinutes%60;
+    timeEl.textContent = String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
 
-    const minutesOfDay = (isPM ? 12*60 : 0) + totalMinutes;
-    onChange(minutesOfDay % 1440);
+    onChange(totalMinutes % 1440);
   }
   render();
 
@@ -158,8 +152,7 @@ function mountDialPicker(container, opts = {}) {
   return {
     getMinutes: () => {
       const totalMinutes = (((valueTicks % TICKS_PER_REV) + TICKS_PER_REV) % TICKS_PER_REV) * STEP_MIN;
-      const isPM = (Math.floor(valueTicks / TICKS_PER_REV) % 2 + 2) % 2 !== 0;
-      return ((isPM ? 12*60 : 0) + totalMinutes) % 1440;
+      return totalMinutes % 1440;
     },
     setMinutes: (m) => { valueTicks = Math.round(((m%1440)+1440)%1440 / STEP_MIN); render(); },
     destroy: () => {
