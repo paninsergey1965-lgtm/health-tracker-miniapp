@@ -72,7 +72,10 @@ function mountDialPicker(container, opts = {}) {
   render();
 
   let actx = null;
-  function ensureAudio(){ if(!actx) actx = new (window.AudioContext||window.webkitAudioContext)(); }
+  function ensureAudio(){
+    if(!actx) actx = new (window.AudioContext||window.webkitAudioContext)();
+    if (actx.state === 'suspended') actx.resume();
+  }
   let clickVariant = 0;
   function playClick(isMajor){
     if (!actx) return;
