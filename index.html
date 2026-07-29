@@ -326,6 +326,7 @@
     border-radius: 8px; padding: 5px 10px; font-size: 12px; cursor: pointer;
   }
 </style>
+  <link rel="stylesheet" href="assets/dial-picker.css">
 </head>
 <body>
 <div id="bg-heart">
@@ -409,8 +410,9 @@
     <div class="detail-chart-wrap" id="detail-chart-wrap"></div>
     <div id="day-journal-input" style="display:none;margin-bottom:16px;">
       <textarea id="day-journal-text" placeholder="Что произошло / что сделать?" style="width:100%;box-sizing:border-box;padding:10px 14px;border-radius:12px;border:1px solid var(--border,#333);background:var(--bg-elevated,#1c1c1e);color:inherit;font-size:16px;margin-bottom:8px;min-height:70px;resize:vertical;"></textarea>
+      <div id="day-journal-dial" style="margin-bottom:12px;"></div>
       <div style="display:flex;gap:8px;margin-bottom:8px;">
-        <input type="time" id="day-journal-time" style="flex:1;box-sizing:border-box;padding:10px 14px;border-radius:12px;border:1px solid var(--border,#333);background:var(--bg-elevated,#1c1c1e);color:inherit;font-size:16px;">
+        <input type="time" id="day-journal-time" style="display:none;">
         <button id="day-journal-mic" style="width:48px;flex-shrink:0;border-radius:12px;border:1px solid var(--border,#333);background:var(--bg-elevated,#1c1c1e);color:inherit;font-size:18px;">🎤</button>
         <button id="day-journal-photo" style="width:48px;flex-shrink:0;border-radius:12px;border:1px solid var(--border,#333);background:var(--bg-elevated,#1c1c1e);color:inherit;font-size:18px;">📷</button>
         <input type="file" id="day-journal-file" accept="image/*" style="display:none">
@@ -462,6 +464,7 @@
   </div>
 </div>
 
+<script src="assets/dial-picker.js"></script>
 <script>
 const tg = window.Telegram?.WebApp;
 tg?.ready();
@@ -1960,6 +1963,23 @@ document.getElementById("input-file").onchange = (e) => {
   if (e.target.files[0]) uploadFile(e.target.files[0]);
   e.target.value = "";
 };
+
+(function(){
+  var timeInput = document.getElementById('day-journal-time');
+  var dialContainer = document.getElementById('day-journal-dial');
+  if (dialContainer && typeof mountDialPicker === 'function') {
+    var now = new Date();
+    var initMin = now.getHours()*60 + now.getMinutes();
+    function toHHMM(m){
+      return String(Math.floor(m/60)).padStart(2,'0') + ':' + String(m%60).padStart(2,'0');
+    }
+    mountDialPicker(dialContainer, {
+      initialMinutes: initMin,
+      onChange: function(m){ timeInput.value = toHHMM(m); }
+    });
+    timeInput.value = toHHMM(initMin);
+  }
+})();
 </script>
 </body>
 </html>
