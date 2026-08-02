@@ -659,7 +659,7 @@ document.getElementById("pharmacy-save-btn").addEventListener("click", async () 
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             name: pharmacySelected.name,
-            type: pharmacySelected.category || "medication",
+            type: (pharmacySelected.form === "injection" ? "injection" : (pharmacySelected.category || "medication")),
             interval_days: intervalDays,
             times: times,
           }),
