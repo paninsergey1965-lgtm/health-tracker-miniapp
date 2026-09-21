@@ -1698,7 +1698,7 @@ async function refreshReminders() {
   } catch (e) {
     lastReminders = { missing_today: [], injections: [] };
   }
-  const parts = (lastReminders.missing_today||[]).map(m=>`Принять: ${m.med_name}`);
+  let parts = []; try { const tt = await apiFetch("/therapy/today", { method: "GET" }); parts = tt.filter(i => !i.taken && !/тестостерон|ундеканоат/i.test(i.name)).map(i => `${(i.scheduled_time||"").slice(0,5)} ${i.name}${i.dose ? " — " + i.dose : ""}`); } catch (e) {}
   (lastReminders.injections || []).forEach(i => {
     if (false) {
       if (i.days_left <= 0) parts.push(`Пора укол: ${i.compound}`);
@@ -1709,7 +1709,7 @@ async function refreshReminders() {
   reminderTicker.classList.add("show");
 
   if (parts.length) {
-    reminderTrack.style.color = "var(--danger)";
+    reminderTrack.style.color = "var(--accent)";
     reminderTrack.innerHTML = parts.map(p => `<span>${p}</span>`).join("");
     return;
   }
