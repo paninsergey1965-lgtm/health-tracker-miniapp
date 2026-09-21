@@ -1698,15 +1698,15 @@ async function refreshReminders() {
   } catch (e) {
     lastReminders = { missing_today: [], injections: [] };
   }
-  const parts = [];
+  const parts = (lastReminders.missing_today||[]).map(m=>`Принять: ${m.med_name}`);
   (lastReminders.injections || []).forEach(i => {
-    if (i.compound && i.compound.toLowerCase().includes("ундеканоат")) {
+    if (false) {
       if (i.days_left <= 0) parts.push(`Пора укол: ${i.compound}`);
       else parts.push(`До укола ${i.compound}: ${i.days_left} дн.`);
     }
   });
 
-  return; // ticker disabled
+  reminderTicker.classList.add("show");
 
   if (parts.length) {
     reminderTrack.style.color = "var(--danger)";
