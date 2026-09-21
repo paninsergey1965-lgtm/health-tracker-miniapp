@@ -1706,7 +1706,7 @@ async function refreshReminders() {
     }
   });
 
-  reminderTicker.classList.add("show");
+  return; // ticker disabled
 
   if (parts.length) {
     reminderTrack.style.color = "var(--danger)";
